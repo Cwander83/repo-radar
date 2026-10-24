@@ -1,4 +1,5 @@
 import SwiftUI
+import WidgetKit
 
 @main
 struct HostApp: App {
@@ -12,9 +13,10 @@ struct HostApp: App {
 struct ContentView: View {
   @State private var statusMessage: String = "Ready"
   @State private var containerPath: String = ""
+  @State private var writeCount: Int = 0
 
-  // Standard group identifier per CHR-77 / CHR-78
-  let groupID = "group.com.chriswander.reporadar"
+  // Team-prefixed group identifier required on macOS for free personal team
+  let groupID = "7P5RMM8JP7.com.chriswander.reporadar"
 
   var body: some View {
     VStack(spacing: 16) {
@@ -54,16 +56,18 @@ struct ContentView: View {
     }
     containerPath = url.path
 
+    writeCount += 1
     let fileURL = url.appendingPathComponent("spike-payload.json")
     let payload: [String: String] = [
-      "message": "Hello from Host App!",
+      "message": "Hello from Host App! (#\(writeCount))",
       "timestamp": Date().ISO8601Format(),
     ]
 
     do {
       let data = try JSONSerialization.data(withJSONObject: payload, options: .prettyPrinted)
       try data.write(to: fileURL, options: .atomic)
-      statusMessage = "✅ Successfully wrote to container at \(Date().formatted(date: .omitted, time: .standard))"
+      WidgetCenter.shared.reloadAllTimelines()
+      statusMessage = "✅ Successfully wrote (#\(writeCount)) to container at \(Date().formatted(date: .omitted, time: .standard))"
     } catch {
       statusMessage = "❌ Write failed: \(error.localizedDescription)"
     }

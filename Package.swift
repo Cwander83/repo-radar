@@ -1,11 +1,11 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 import Foundation
 import PackageDescription
 
 let package = Package(
     name: "RepoRadarCore",
     platforms: [
-        .macOS(.v14)
+        .macOS(.v26)
     ],
     products: [
         .library(

@@ -3,7 +3,7 @@ import Foundation
 /// Persistence store for RepoRadar user configuration in App Group UserDefaults.
 public struct ConfigStore: @unchecked Sendable {
   /// Default App Group suite identifier.
-  public static let defaultSuiteName = "group.com.chriswander.reporadar"
+  public static let defaultSuiteName = "7P5RMM8JP7.com.chriswander.reporadar"
 
   /// Storage keys used in UserDefaults.
   public enum Keys {
