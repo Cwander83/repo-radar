@@ -1,0 +1,667 @@
+{
+  "data": {
+    "viewer": {
+      "login": "Cwander83"
+    },
+    "rateLimit": {
+      "cost": 49,
+      "limit": 5000,
+      "remaining": 4857,
+      "resetAt": "2026-10-24T19:44:22Z"
+    },
+    "search": {
+      "repositoryCount": 6,
+      "nodes": [
+        {
+          "nameWithOwner": "Cwander83/ohiostatefootball",
+          "url": "https://github.com/Cwander83/ohiostatefootball",
+          "isPrivate": false,
+          "isArchived": false,
+          "defaultBranchRef": {
+            "name": "main",
+            "target": {
+              "oid": "48fa2a3d63c1c714f51a3b4339c3489924306ff2",
+              "committedDate": "2026-10-12T01:11:09Z",
+              "url": "https://github.com/Cwander83/ohiostatefootball/commit/48fa2a3d63c1c714f51a3b4339c3489924306ff2",
+              "statusCheckRollup": {
+                "state": "SUCCESS",
+                "contexts": {
+                  "totalCount": 1,
+                  "nodes": [
+                    {
+                      "__typename": "StatusContext",
+                      "context": "Vercel",
+                      "state": "SUCCESS",
+                      "targetUrl": "https://vercel.com/chris-wanders-projects/ohiostatefootball/5y3JUdwowkWDor6KPo94M2JPqdRr",
+                      "createdAt": "2026-10-12T01:11:19Z"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "mainRef": {
+            "name": "main",
+            "target": {
+              "oid": "48fa2a3d63c1c714f51a3b4339c3489924306ff2",
+              "committedDate": "2026-10-12T01:11:09Z",
+              "url": "https://github.com/Cwander83/ohiostatefootball/commit/48fa2a3d63c1c714f51a3b4339c3489924306ff2",
+              "statusCheckRollup": {
+                "state": "SUCCESS",
+                "contexts": {
+                  "totalCount": 1,
+                  "nodes": [
+                    {
+                      "__typename": "StatusContext",
+                      "context": "Vercel",
+                      "state": "SUCCESS",
+                      "targetUrl": "https://vercel.com/chris-wanders-projects/ohiostatefootball/5y3JUdwowkWDor6KPo94M2JPqdRr",
+                      "createdAt": "2026-10-12T01:11:19Z"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "pullRequests": {
+            "totalCount": 0,
+            "nodes": []
+          },
+          "refs": {
+            "totalCount": 2,
+            "pageInfo": {
+              "hasNextPage": false,
+              "endCursor": "Mg"
+            },
+            "nodes": [
+              {
+                "name": "main",
+                "branchProtectionRule": null,
+                "associatedPullRequests": {
+                  "totalCount": 0
+                },
+                "target": {
+                  "oid": "48fa2a3d63c1c714f51a3b4339c3489924306ff2",
+                  "committedDate": "2026-10-12T01:11:09Z"
+                }
+              },
+              {
+                "name": "update-stats-2026-week-5",
+                "branchProtectionRule": null,
+                "associatedPullRequests": {
+                  "totalCount": 0
+                },
+                "target": {
+                  "oid": "836bd3a6c0ca717cd025d1ff3f9c3f0dcc57456d",
+                  "committedDate": "2026-10-04T23:45:40Z"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "nameWithOwner": "Cwander83/gravity-bar",
+          "url": "https://github.com/Cwander83/gravity-bar",
+          "isPrivate": false,
+          "isArchived": false,
+          "defaultBranchRef": {
+            "name": "main",
+            "target": {
+              "oid": "8f9274b669109e4cd6420afc7f5e1940026b78a3",
+              "committedDate": "2026-10-24T17:46:59Z",
+              "url": "https://github.com/Cwander83/gravity-bar/commit/8f9274b669109e4cd6420afc7f5e1940026b78a3",
+              "statusCheckRollup": {
+                "state": "SUCCESS",
+                "contexts": {
+                  "totalCount": 4,
+                  "nodes": [
+                    {
+                      "__typename": "CheckRun",
+                      "name": "Build & Test (macOS)",
+                      "status": "COMPLETED",
+                      "conclusion": "SUCCESS",
+                      "detailsUrl": "https://github.com/Cwander83/gravity-bar/actions/runs/40117692416/job/120942332494",
+                      "startedAt": "2026-10-24T17:47:05Z",
+                      "completedAt": "2026-10-24T17:47:47Z",
+                      "checkSuite": {
+                        "workflowRun": {
+                          "workflow": {
+                            "name": "CI"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "__typename": "CheckRun",
+                      "name": "Build & Test (macOS)",
+                      "status": "COMPLETED",
+                      "conclusion": "SUCCESS",
+                      "detailsUrl": "https://github.com/Cwander83/gravity-bar/actions/runs/40117693424/job/120942335111",
+                      "startedAt": "2026-10-24T17:47:06Z",
+                      "completedAt": "2026-10-24T17:47:38Z",
+                      "checkSuite": {
+                        "workflowRun": {
+                          "workflow": {
+                            "name": "CI"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "__typename": "CheckRun",
+                      "name": "Secret Detection (Gitleaks)",
+                      "status": "COMPLETED",
+                      "conclusion": "SUCCESS",
+                      "detailsUrl": "https://github.com/Cwander83/gravity-bar/actions/runs/40117692366/job/120942331840",
+                      "startedAt": "2026-10-24T17:47:05Z",
+                      "completedAt": "2026-10-24T17:47:10Z",
+                      "checkSuite": {
+                        "workflowRun": {
+                          "workflow": {
+                            "name": "Security & Secret Scan"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "__typename": "CheckRun",
+                      "name": "Secret Detection (Gitleaks)",
+                      "status": "COMPLETED",
+                      "conclusion": "SUCCESS",
+                      "detailsUrl": "https://github.com/Cwander83/gravity-bar/actions/runs/40117693429/job/120942335015",
+                      "startedAt": "2026-10-24T17:47:05Z",
+                      "completedAt": "2026-10-24T17:47:11Z",
+                      "checkSuite": {
+                        "workflowRun": {
+                          "workflow": {
+                            "name": "Security & Secret Scan"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "mainRef": {
+            "name": "main",
+            "target": {
+              "oid": "8f9274b669109e4cd6420afc7f5e1940026b78a3",
+              "committedDate": "2026-10-24T17:46:59Z",
+              "url": "https://github.com/Cwander83/gravity-bar/commit/8f9274b669109e4cd6420afc7f5e1940026b78a3",
+              "statusCheckRollup": {
+                "state": "SUCCESS",
+                "contexts": {
+                  "totalCount": 4,
+                  "nodes": [
+                    {
+                      "__typename": "CheckRun",
+                      "name": "Build & Test (macOS)",
+                      "status": "COMPLETED",
+                      "conclusion": "SUCCESS",
+                      "detailsUrl": "https://github.com/Cwander83/gravity-bar/actions/runs/40117692416/job/120942332494",
+                      "startedAt": "2026-10-24T17:47:05Z",
+                      "completedAt": "2026-10-24T17:47:47Z",
+                      "checkSuite": {
+                        "workflowRun": {
+                          "workflow": {
+                            "name": "CI"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "__typename": "CheckRun",
+                      "name": "Build & Test (macOS)",
+                      "status": "COMPLETED",
+                      "conclusion": "SUCCESS",
+                      "detailsUrl": "https://github.com/Cwander83/gravity-bar/actions/runs/40117693424/job/120942335111",
+                      "startedAt": "2026-10-24T17:47:06Z",
+                      "completedAt": "2026-10-24T17:47:38Z",
+                      "checkSuite": {
+                        "workflowRun": {
+                          "workflow": {
+                            "name": "CI"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "__typename": "CheckRun",
+                      "name": "Secret Detection (Gitleaks)",
+                      "status": "COMPLETED",
+                      "conclusion": "SUCCESS",
+                      "detailsUrl": "https://github.com/Cwander83/gravity-bar/actions/runs/40117692366/job/120942331840",
+                      "startedAt": "2026-10-24T17:47:05Z",
+                      "completedAt": "2026-10-24T17:47:10Z",
+                      "checkSuite": {
+                        "workflowRun": {
+                          "workflow": {
+                            "name": "Security & Secret Scan"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "__typename": "CheckRun",
+                      "name": "Secret Detection (Gitleaks)",
+                      "status": "COMPLETED",
+                      "conclusion": "SUCCESS",
+                      "detailsUrl": "https://github.com/Cwander83/gravity-bar/actions/runs/40117693429/job/120942335015",
+                      "startedAt": "2026-10-24T17:47:05Z",
+                      "completedAt": "2026-10-24T17:47:11Z",
+                      "checkSuite": {
+                        "workflowRun": {
+                          "workflow": {
+                            "name": "Security & Secret Scan"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "pullRequests": {
+            "totalCount": 0,
+            "nodes": []
+          },
+          "refs": {
+            "totalCount": 2,
+            "pageInfo": {
+              "hasNextPage": false,
+              "endCursor": "Mg"
+            },
+            "nodes": [
+              {
+                "name": "develop",
+                "branchProtectionRule": null,
+                "associatedPullRequests": {
+                  "totalCount": 0
+                },
+                "target": {
+                  "oid": "8f9274b669109e4cd6420afc7f5e1940026b78a3",
+                  "committedDate": "2026-10-24T17:46:59Z"
+                }
+              },
+              {
+                "name": "main",
+                "branchProtectionRule": null,
+                "associatedPullRequests": {
+                  "totalCount": 0
+                },
+                "target": {
+                  "oid": "8f9274b669109e4cd6420afc7f5e1940026b78a3",
+                  "committedDate": "2026-10-24T17:46:59Z"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "nameWithOwner": "Cwander83/seo_reader",
+          "url": "https://github.com/Cwander83/seo_reader",
+          "isPrivate": false,
+          "isArchived": false,
+          "defaultBranchRef": null,
+          "mainRef": null,
+          "pullRequests": {
+            "totalCount": 0,
+            "nodes": []
+          },
+          "refs": {
+            "totalCount": 0,
+            "pageInfo": {
+              "hasNextPage": false,
+              "endCursor": null
+            },
+            "nodes": []
+          }
+        },
+        {
+          "nameWithOwner": "Cwander83/learning-center",
+          "url": "https://github.com/Cwander83/learning-center",
+          "isPrivate": false,
+          "isArchived": false,
+          "defaultBranchRef": {
+            "name": "main",
+            "target": {
+              "oid": "a27e5304b25383d8efc8911302ea992f21a28e8e",
+              "committedDate": "2026-10-01T00:24:28Z",
+              "url": "https://github.com/Cwander83/learning-center/commit/a27e5304b25383d8efc8911302ea992f21a28e8e",
+              "statusCheckRollup": {
+                "state": "SUCCESS",
+                "contexts": {
+                  "totalCount": 1,
+                  "nodes": [
+                    {
+                      "__typename": "StatusContext",
+                      "context": "Vercel",
+                      "state": "SUCCESS",
+                      "targetUrl": "https://vercel.com/chris-wanders-projects/learning-center/G1uK5Z4wVG4sZRNyoD1LHSMVoAkr",
+                      "createdAt": "2026-10-01T00:24:44Z"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "mainRef": {
+            "name": "main",
+            "target": {
+              "oid": "a27e5304b25383d8efc8911302ea992f21a28e8e",
+              "committedDate": "2026-10-01T00:24:28Z",
+              "url": "https://github.com/Cwander83/learning-center/commit/a27e5304b25383d8efc8911302ea992f21a28e8e",
+              "statusCheckRollup": {
+                "state": "SUCCESS",
+                "contexts": {
+                  "totalCount": 1,
+                  "nodes": [
+                    {
+                      "__typename": "StatusContext",
+                      "context": "Vercel",
+                      "state": "SUCCESS",
+                      "targetUrl": "https://vercel.com/chris-wanders-projects/learning-center/G1uK5Z4wVG4sZRNyoD1LHSMVoAkr",
+                      "createdAt": "2026-10-01T00:24:44Z"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "pullRequests": {
+            "totalCount": 0,
+            "nodes": []
+          },
+          "refs": {
+            "totalCount": 5,
+            "pageInfo": {
+              "hasNextPage": false,
+              "endCursor": "NQ"
+            },
+            "nodes": [
+              {
+                "name": "docs/angular-beginners-guide",
+                "branchProtectionRule": null,
+                "associatedPullRequests": {
+                  "totalCount": 0
+                },
+                "target": {
+                  "oid": "cdfbad268bc903231871f9b98bde9038db7dabca",
+                  "committedDate": "2026-09-28T23:59:25Z"
+                }
+              },
+              {
+                "name": "docs/bluehost-agent-hosting",
+                "branchProtectionRule": null,
+                "associatedPullRequests": {
+                  "totalCount": 0
+                },
+                "target": {
+                  "oid": "eebf6a19e145cffafce4d45ee4742cbeb69a0cdc",
+                  "committedDate": "2026-10-01T00:22:34Z"
+                }
+              },
+              {
+                "name": "docs/javascript-2026-guides",
+                "branchProtectionRule": null,
+                "associatedPullRequests": {
+                  "totalCount": 0
+                },
+                "target": {
+                  "oid": "854786db87278aadd5549c5ff536afa185cdfa29",
+                  "committedDate": "2026-09-28T23:03:59Z"
+                }
+              },
+              {
+                "name": "docs/payload-cms-guides",
+                "branchProtectionRule": null,
+                "associatedPullRequests": {
+                  "totalCount": 0
+                },
+                "target": {
+                  "oid": "b896e4736ca7fc6b6d47b9b41ee9cc8a2bdd1e52",
+                  "committedDate": "2026-10-01T00:03:27Z"
+                }
+              },
+              {
+                "name": "main",
+                "branchProtectionRule": null,
+                "associatedPullRequests": {
+                  "totalCount": 0
+                },
+                "target": {
+                  "oid": "a27e5304b25383d8efc8911302ea992f21a28e8e",
+                  "committedDate": "2026-10-01T00:24:28Z"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "nameWithOwner": "Cwander83/repo-radar",
+          "url": "https://github.com/Cwander83/repo-radar",
+          "isPrivate": false,
+          "isArchived": false,
+          "defaultBranchRef": {
+            "name": "develop",
+            "target": {
+              "oid": "3ee18f009d3287b3f7971b60e1656ac7b1c46eb7",
+              "committedDate": "2026-10-24T18:11:03Z",
+              "url": "https://github.com/Cwander83/repo-radar/commit/3ee18f009d3287b3f7971b60e1656ac7b1c46eb7",
+              "statusCheckRollup": {
+                "state": "SUCCESS",
+                "contexts": {
+                  "totalCount": 3,
+                  "nodes": [
+                    {
+                      "__typename": "CheckRun",
+                      "name": "Build & Test (macOS)",
+                      "status": "COMPLETED",
+                      "conclusion": "SUCCESS",
+                      "detailsUrl": "https://github.com/Cwander83/repo-radar/actions/runs/40119532386/job/120947835316",
+                      "startedAt": "2026-10-24T18:11:08Z",
+                      "completedAt": "2026-10-24T18:11:19Z",
+                      "checkSuite": {
+                        "workflowRun": {
+                          "workflow": {
+                            "name": "CI"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "__typename": "CheckRun",
+                      "name": "Secret Detection (Gitleaks)",
+                      "status": "COMPLETED",
+                      "conclusion": "SUCCESS",
+                      "detailsUrl": "https://github.com/Cwander83/repo-radar/actions/runs/40119532377/job/120947835356",
+                      "startedAt": "2026-10-24T18:11:08Z",
+                      "completedAt": "2026-10-24T18:11:12Z",
+                      "checkSuite": {
+                        "workflowRun": {
+                          "workflow": {
+                            "name": "Security & Secret Scan"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "__typename": "CheckRun",
+                      "name": ".github/dependabot.yml",
+                      "status": "COMPLETED",
+                      "conclusion": "SUCCESS",
+                      "detailsUrl": "https://dependabot-api.githubapp.com",
+                      "startedAt": "2026-10-24T18:11:06Z",
+                      "completedAt": "2026-10-24T18:11:07Z",
+                      "checkSuite": {
+                        "workflowRun": null
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "mainRef": {
+            "name": "main",
+            "target": {
+              "oid": "702f278d79200a30f7aade1933218dfaae3929a8",
+              "committedDate": "2026-10-24T18:07:07Z",
+              "url": "https://github.com/Cwander83/repo-radar/commit/702f278d79200a30f7aade1933218dfaae3929a8",
+              "statusCheckRollup": {
+                "state": "SUCCESS",
+                "contexts": {
+                  "totalCount": 2,
+                  "nodes": [
+                    {
+                      "__typename": "CheckRun",
+                      "name": "Build & Test (macOS)",
+                      "status": "COMPLETED",
+                      "conclusion": "SUCCESS",
+                      "detailsUrl": "https://github.com/Cwander83/repo-radar/actions/runs/40119241467/job/120946960329",
+                      "startedAt": "2026-10-24T18:07:21Z",
+                      "completedAt": "2026-10-24T18:07:28Z",
+                      "checkSuite": {
+                        "workflowRun": {
+                          "workflow": {
+                            "name": "CI"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "__typename": "CheckRun",
+                      "name": "Secret Detection (Gitleaks)",
+                      "status": "COMPLETED",
+                      "conclusion": "SUCCESS",
+                      "detailsUrl": "https://github.com/Cwander83/repo-radar/actions/runs/40119241459/job/120946960492",
+                      "startedAt": "2026-10-24T18:07:21Z",
+                      "completedAt": "2026-10-24T18:07:26Z",
+                      "checkSuite": {
+                        "workflowRun": {
+                          "workflow": {
+                            "name": "Security & Secret Scan"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "pullRequests": {
+            "totalCount": 0,
+            "nodes": []
+          },
+          "refs": {
+            "totalCount": 2,
+            "pageInfo": {
+              "hasNextPage": false,
+              "endCursor": "Mg"
+            },
+            "nodes": [
+              {
+                "name": "develop",
+                "branchProtectionRule": null,
+                "associatedPullRequests": {
+                  "totalCount": 0
+                },
+                "target": {
+                  "oid": "3ee18f009d3287b3f7971b60e1656ac7b1c46eb7",
+                  "committedDate": "2026-10-24T18:11:03Z"
+                }
+              },
+              {
+                "name": "main",
+                "branchProtectionRule": {
+                  "id": "BPR_kwDOVWFkIM4FFbZb"
+                },
+                "associatedPullRequests": {
+                  "totalCount": 0
+                },
+                "target": {
+                  "oid": "702f278d79200a30f7aade1933218dfaae3929a8",
+                  "committedDate": "2026-10-24T18:07:07Z"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "nameWithOwner": "Cwander83/workout-tracker",
+          "url": "https://github.com/Cwander83/workout-tracker",
+          "isPrivate": false,
+          "isArchived": false,
+          "defaultBranchRef": {
+            "name": "main",
+            "target": {
+              "oid": "e7c10d18612c70b4a362d3c2cdd6afa4488ae1f4",
+              "committedDate": "2026-09-04T12:55:56Z",
+              "url": "https://github.com/Cwander83/workout-tracker/commit/e7c10d18612c70b4a362d3c2cdd6afa4488ae1f4",
+              "statusCheckRollup": null
+            }
+          },
+          "mainRef": {
+            "name": "main",
+            "target": {
+              "oid": "e7c10d18612c70b4a362d3c2cdd6afa4488ae1f4",
+              "committedDate": "2026-09-04T12:55:56Z",
+              "url": "https://github.com/Cwander83/workout-tracker/commit/e7c10d18612c70b4a362d3c2cdd6afa4488ae1f4",
+              "statusCheckRollup": null
+            }
+          },
+          "pullRequests": {
+            "totalCount": 0,
+            "nodes": []
+          },
+          "refs": {
+            "totalCount": 3,
+            "pageInfo": {
+              "hasNextPage": false,
+              "endCursor": "Mw"
+            },
+            "nodes": [
+              {
+                "name": "cursor/site-nav-history-session-4cb2",
+                "branchProtectionRule": null,
+                "associatedPullRequests": {
+                  "totalCount": 0
+                },
+                "target": {
+                  "oid": "c0ee9fa6e90b630979a640c0ede010d7d8d96c3b",
+                  "committedDate": "2026-08-23T23:19:56Z"
+                }
+              },
+              {
+                "name": "frontend-001",
+                "branchProtectionRule": null,
+                "associatedPullRequests": {
+                  "totalCount": 0
+                },
+                "target": {
+                  "oid": "6cd0320b1af5a7e05ef6534175c1d0de540d7081",
+                  "committedDate": "2021-04-01T20:04:35Z"
+                }
+              },
+              {
+                "name": "main",
+                "branchProtectionRule": null,
+                "associatedPullRequests": {
+                  "totalCount": 0
+                },
+                "target": {
+                  "oid": "e7c10d18612c70b4a362d3c2cdd6afa4488ae1f4",
+                  "committedDate": "2026-09-04T12:55:56Z"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
