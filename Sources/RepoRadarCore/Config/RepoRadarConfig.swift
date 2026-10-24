@@ -64,6 +64,7 @@ public enum RepoValidationError: Error, Sendable, Equatable, CustomStringConvert
 public enum ConfigValidationError: Error, Sendable, Equatable, CustomStringConvertible {
   case invalidRepo(RepoValidationError)
   case invalidStaleDays(Int)
+  case tooManyRepos(count: Int, max: Int)
 
   public var description: String {
     switch self {
@@ -71,12 +72,17 @@ public enum ConfigValidationError: Error, Sendable, Equatable, CustomStringConve
       return error.description
     case .invalidStaleDays(let days):
       return "Stale days must be at least 1 (got \(days))."
+    case .tooManyRepos(let count, let max):
+      return "Maximum of \(max) watched repositories allowed (got \(count))."
     }
   }
 }
 
 /// Strongly typed configuration for RepoRadar.
 public struct RepoRadarConfig: Codable, Sendable, Equatable {
+  /// Maximum number of watched repositories supported by the single-query GraphQL fetcher.
+  public static let maxWatchedRepos: Int = 25
+
   public static let defaultPollInterval: PollInterval = .fiveMinutes
   public static let defaultStaleDays: Int = 30
   public static let defaultRefreshOnWake: Bool = true
@@ -179,8 +185,12 @@ public struct RepoRadarConfig: Codable, Sendable, Equatable {
     return validated
   }
 
-  /// Validates the configuration, throwing on malformed repos, duplicates, or invalid stale days.
+  /// Validates the configuration, throwing on malformed repos, duplicates, excess repos, or invalid stale days.
   public func validate() throws {
+    guard watchedRepos.count <= Self.maxWatchedRepos else {
+      throw ConfigValidationError.tooManyRepos(count: watchedRepos.count, max: Self.maxWatchedRepos)
+    }
+
     do {
       _ = try Self.validate(repos: watchedRepos)
     } catch let error as RepoValidationError {
@@ -192,7 +202,7 @@ public struct RepoRadarConfig: Codable, Sendable, Equatable {
     }
   }
 
-  /// Returns a sanitized copy with trimmed, deduplicated repos and clamped staleDays.
+  /// Returns a sanitized copy with trimmed, deduplicated repos clamped to maxWatchedRepos and clamped staleDays.
   public func sanitized() -> RepoRadarConfig {
     var seen = Set<String>()
     var deduplicated: [String] = []
@@ -203,6 +213,9 @@ public struct RepoRadarConfig: Codable, Sendable, Equatable {
         if !seen.contains(canonicalKey) {
           seen.insert(canonicalKey)
           deduplicated.append(clean)
+          if deduplicated.count == Self.maxWatchedRepos {
+            break
+          }
         }
       }
     }
