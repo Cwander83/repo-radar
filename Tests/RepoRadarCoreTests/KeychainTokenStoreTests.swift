@@ -88,8 +88,6 @@ struct KeychainTokenStoreTests {
   @Test("KeychainError descriptions are formatted properly")
   func keychainErrorDescriptions() {
     #expect(KeychainError.emptyToken.errorDescription == "Personal access token cannot be empty.")
-    #expect(
-      KeychainError.itemNotFound.errorDescription == "Personal access token not found in Keychain.")
     #expect(KeychainError.invalidData.errorDescription == "Keychain item contained invalid data.")
     #expect(
       KeychainError.osStatus(status: -25300, message: "Item not found").errorDescription

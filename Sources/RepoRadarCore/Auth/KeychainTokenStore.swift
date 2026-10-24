@@ -4,7 +4,6 @@ import Security
 /// Errors occurring during Keychain operations.
 public enum KeychainError: Error, Sendable, Equatable, LocalizedError {
   case emptyToken
-  case itemNotFound
   case invalidData
   case osStatus(status: OSStatus, message: String)
 
@@ -12,8 +11,6 @@ public enum KeychainError: Error, Sendable, Equatable, LocalizedError {
     switch self {
     case .emptyToken:
       return "Personal access token cannot be empty."
-    case .itemNotFound:
-      return "Personal access token not found in Keychain."
     case .invalidData:
       return "Keychain item contained invalid data."
     case .osStatus(let status, let message):
