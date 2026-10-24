@@ -63,6 +63,10 @@ public final class GitHubGraphQLClient: Sendable {
     let response: URLResponse
     do {
       (data, response) = try await session.data(for: request)
+    } catch let urlError as URLError where urlError.code == .cancelled {
+      throw CancellationError()
+    } catch is CancellationError {
+      throw CancellationError()
     } catch let urlError as URLError {
       throw RepoRadarError.offline(detail: urlError.localizedDescription)
     } catch {
@@ -109,8 +113,8 @@ public final class GitHubGraphQLClient: Sendable {
             {
               throw RepoRadarError.tokenUnauthorized(detail: error.message)
             }
-            if msg.contains("rate limit") {
-              throw RepoRadarError.rateLimited(resetAt: nil)
+            if error.type == "RATE_LIMITED" || msg.contains("rate limit") {
+              throw RepoRadarError.rateLimited(resetAt: headerResetAt)
             }
           }
           throw RepoRadarError.graphQL(errors: errors)
@@ -119,11 +123,8 @@ public final class GitHubGraphQLClient: Sendable {
         }
       }
 
-      // Check if GraphQL rateLimit shows 0 remaining
-      if queryResponse.data?.rateLimit?.remaining == 0 {
-        throw RepoRadarError.rateLimited(resetAt: queryResponse.data?.rateLimit?.resetAt)
-      }
-
+      // A 200 with data is returned even when rateLimit.remaining hits 0: the data is valid,
+      // and the next request surfaces rateLimited.
       return queryResponse
 
     case 401:

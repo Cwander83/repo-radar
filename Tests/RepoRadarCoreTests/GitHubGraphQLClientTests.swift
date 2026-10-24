@@ -208,8 +208,52 @@ struct GitHubGraphQLClientTests {
     }
   }
 
-  @Test("GraphQL response with 0 rateLimit remaining maps to rateLimited")
-  func testRateLimitedZeroRemainingInBody() async {
+  @Test("GraphQL RATE_LIMITED error with null data maps to rateLimited with header resetAt")
+  func testGraphQLRateLimitedError() async {
+    let (client, endpoint) = makeClient()
+    let json = """
+      {
+        "data": null,
+        "errors": [
+          { "type": "RATE_LIMITED", "message": "API rate limit already exceeded for user ID 1." }
+        ]
+      }
+      """.data(using: .utf8)!
+
+    MockURLProtocol.requestHandler = { _ in
+      let response = HTTPURLResponse(
+        url: endpoint,
+        statusCode: 200,
+        httpVersion: nil,
+        headerFields: ["x-ratelimit-remaining": "0", "x-ratelimit-reset": "1792874712"]
+      )!
+      return (response, json)
+    }
+
+    do {
+      _ = try await client.fetch(repos: ["owner/repo"], token: "token")
+      Issue.record("Expected rateLimited error")
+    } catch let error as RepoRadarError {
+      #expect(error == .rateLimited(resetAt: Date(timeIntervalSince1970: 1_792_874_712)))
+    } catch {
+      Issue.record("Unexpected error: \(error)")
+    }
+  }
+
+  @Test("Cancelled request throws CancellationError, not offline")
+  func testCancelledRequest() async {
+    let (client, _) = makeClient()
+    MockURLProtocol.requestHandler = { _ in
+      throw URLError(.cancelled)
+    }
+
+    await #expect(throws: CancellationError.self) {
+      _ = try await client.fetch(repos: ["owner/repo"], token: "token")
+    }
+  }
+
+  @Test("Successful response with 0 rateLimit remaining still returns data")
+  func testZeroRemainingReturnsData() async throws {
     let (client, endpoint) = makeClient()
     let resetString = "2026-10-24T18:00:00Z"
     let json = """
@@ -237,15 +281,10 @@ struct GitHubGraphQLClientTests {
       return (response, json)
     }
 
-    do {
-      _ = try await client.fetch(repos: ["owner/repo"], token: "token")
-      Issue.record("Expected rateLimited error")
-    } catch let error as RepoRadarError {
-      let expectedDate = try? Date(resetString, strategy: .iso8601)
-      #expect(error == .rateLimited(resetAt: expectedDate))
-    } catch {
-      Issue.record("Unexpected error: \(error)")
-    }
+    let response = try await client.fetch(repos: ["owner/repo"], token: "token")
+    let rateLimit = try #require(response.data?.rateLimit)
+    #expect(rateLimit.remaining == 0)
+    #expect(rateLimit.resetAt == (try Date(resetString, strategy: .iso8601)))
   }
 
   @Test("Offline URLError maps to offline")
