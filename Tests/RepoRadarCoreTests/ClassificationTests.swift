@@ -271,35 +271,16 @@ struct ClassificationTests {
     #expect(report.runningCI.isEmpty)
   }
 
-  @Test("Action required counts as failing, status context pending counts as running")
-  func actionRequiredAndStatusContextPending() {
+  private func repo(withContext context: StatusCheckRollupContext) -> RepositoryNode {
     let commit = CommitTarget(
       oid: "c1",
       committedDate: Date(),
       statusCheckRollup: StatusCheckRollup(
         state: "PENDING",
-        contexts: StatusCheckRollupContextConnection(
-          totalCount: 2,
-          nodes: [
-            .checkRun(
-              CheckRun(
-                name: "Approval",
-                status: "COMPLETED",
-                conclusion: "ACTION_REQUIRED"
-              )
-            ),
-            .statusContext(
-              StatusContext(
-                context: "deployment/preview",
-                state: "PENDING"
-              )
-            ),
-          ]
-        )
+        contexts: StatusCheckRollupContextConnection(totalCount: 1, nodes: [context])
       )
     )
-
-    let repo = RepositoryNode(
+    return RepositoryNode(
       nameWithOwner: "owner/repo",
       url: URL(string: "https://github.com/owner/repo")!,
       isPrivate: false,
@@ -308,15 +289,54 @@ struct ClassificationTests {
       pullRequests: PullRequestConnection(totalCount: 0, nodes: []),
       refs: RefConnection(totalCount: 0, pageInfo: nil, nodes: [])
     )
+  }
 
-    let report = Classifier.classify(repos: [repo], viewerLogin: "owner")
-    #expect(report.failingCI.count == 1)
-    #expect(report.failingCI[0].check == "Approval")
-    #expect(report.failingCI[0].conclusion == "ACTION_REQUIRED")
+  enum Outcome { case failing, running, ignored }
 
-    #expect(report.runningCI.count == 1)
-    #expect(report.runningCI[0].check == "deployment/preview")
-    #expect(report.runningCI[0].status == "PENDING")
+  @Test(
+    "Check run status/conclusion table",
+    arguments: [
+      ("COMPLETED", "FAILURE", Outcome.failing),
+      ("COMPLETED", "TIMED_OUT", .failing),
+      ("COMPLETED", "STARTUP_FAILURE", .failing),
+      ("COMPLETED", "ERROR", .failing),
+      ("COMPLETED", "SUCCESS", .ignored),
+      ("COMPLETED", "CANCELLED", .ignored),
+      ("COMPLETED", "SKIPPED", .ignored),
+      ("COMPLETED", "NEUTRAL", .ignored),
+      ("COMPLETED", "STALE", .ignored),
+      ("COMPLETED", "ACTION_REQUIRED", .ignored),
+      ("QUEUED", nil, .running),
+      ("IN_PROGRESS", nil, .running),
+      ("WAITING", nil, .running),
+      ("PENDING", nil, .running),
+      ("REQUESTED", nil, .running),
+    ] as [(String, String?, Outcome)]
+  )
+  func checkRunTable(status: String, conclusion: String?, expected: Outcome) {
+    let run = CheckRun(name: "Job", status: status, conclusion: conclusion)
+    let report = Classifier.classify(
+      repos: [repo(withContext: .checkRun(run))], viewerLogin: "owner")
+    #expect(report.failingCI.count == (expected == .failing ? 1 : 0))
+    #expect(report.runningCI.count == (expected == .running ? 1 : 0))
+  }
+
+  @Test(
+    "Commit status state table",
+    arguments: [
+      ("FAILURE", Outcome.failing),
+      ("ERROR", .failing),
+      ("SUCCESS", .ignored),
+      ("PENDING", .running),
+      ("EXPECTED", .running),
+    ] as [(String, Outcome)]
+  )
+  func statusContextTable(state: String, expected: Outcome) {
+    let context = StatusContext(context: "ci/legacy", state: state)
+    let report = Classifier.classify(
+      repos: [repo(withContext: .statusContext(context))], viewerLogin: "owner")
+    #expect(report.failingCI.count == (expected == .failing ? 1 : 0))
+    #expect(report.runningCI.count == (expected == .running ? 1 : 0))
   }
 
   @Test("Protected branches and branches with open PRs are excluded from stale list")

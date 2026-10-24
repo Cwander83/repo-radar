@@ -171,7 +171,7 @@ public enum Classifier {
         let isFailing: Bool
         if let conc = conclusion {
           switch conc {
-          case "FAILURE", "ERROR", "TIMED_OUT", "STARTUP_FAILURE", "ACTION_REQUIRED":
+          case "FAILURE", "ERROR", "TIMED_OUT", "STARTUP_FAILURE":
             isFailing = true
           default:
             isFailing = false
