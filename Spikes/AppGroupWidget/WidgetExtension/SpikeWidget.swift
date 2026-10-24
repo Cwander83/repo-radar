@@ -2,7 +2,8 @@ import SwiftUI
 import WidgetKit
 
 struct Provider: TimelineProvider {
-  let groupID = "group.com.chriswander.reporadar"
+  // Team-prefixed group identifier required on macOS for free personal team
+  let groupID = "7P5RMM8JP7.com.chriswander.reporadar"
 
   func placeholder(in context: Context) -> SimpleEntry {
     SimpleEntry(date: Date(), message: "Placeholder", timestamp: "")
@@ -22,20 +23,24 @@ struct Provider: TimelineProvider {
   private func readEntry() -> SimpleEntry {
     guard let url = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: groupID)
     else {
-      return SimpleEntry(date: Date(), message: "❌ containerURL is nil", timestamp: "")
+      return SimpleEntry(date: Date(), message: "❌ containerURL is nil", timestamp: groupID)
     }
     let fileURL = url.appendingPathComponent("spike-payload.json")
-    guard let data = try? Data(contentsOf: fileURL),
-      let json = try? JSONSerialization.jsonObject(with: data) as? [String: String]
-    else {
+    do {
+      let data = try Data(contentsOf: fileURL)
+      guard let json = try JSONSerialization.jsonObject(with: data) as? [String: String] else {
+        return SimpleEntry(
+          date: Date(), message: "❌ Invalid JSON", timestamp: "\(data.count) bytes")
+      }
       return SimpleEntry(
-        date: Date(), message: "No data found at container", timestamp: url.path)
+        date: Date(),
+        message: json["message"] ?? "Unknown",
+        timestamp: json["timestamp"] ?? ""
+      )
+    } catch {
+      return SimpleEntry(
+        date: Date(), message: "❌ \(error.localizedDescription)", timestamp: fileURL.path)
     }
-    return SimpleEntry(
-      date: Date(),
-      message: json["message"] ?? "Unknown",
-      timestamp: json["timestamp"] ?? ""
-    )
   }
 }
 

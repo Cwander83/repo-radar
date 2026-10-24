@@ -1,0 +1,11 @@
+// Configurations/Base.xcconfig
+// Base configuration shared across all RepoRadar targets.
+
+MACOSX_DEPLOYMENT_TARGET = 26.0
+SWIFT_VERSION = 6.0
+CODE_SIGN_STYLE = Automatic
+ENABLE_USER_SCRIPT_SANDBOXING = YES
+
+// Include optional developer-local settings (e.g. personal team ID).
+// Ignored by git so CI is not bound to a personal signing identity.
+#include? "Local.xcconfig"

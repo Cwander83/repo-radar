@@ -41,7 +41,7 @@ private struct SnapshotVersionHeader: Decodable {
 /// Manages reading and writing widget snapshots in the shared App Group container.
 public struct SnapshotStore: Sendable {
   /// Default macOS App Group container identifier.
-  public static let defaultAppGroupIdentifier = "group.com.chriswander.reporadar"
+  public static let defaultAppGroupIdentifier = "7P5RMM8JP7.com.chriswander.reporadar"
 
   /// Default snapshot filename within the App Group container.
   public static let defaultFilename = "snapshot.json"

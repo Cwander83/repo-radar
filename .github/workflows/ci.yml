@@ -33,4 +33,6 @@ jobs:
           swift build -v
           swift test
 
-      # TODO(phase-1): add an xcodebuild build/test step once the .xcodeproj and scheme exist.
+      - name: Build Xcode Project
+        run: |
+          xcodebuild -project RepoRadar.xcodeproj -scheme RepoRadar -configuration Debug CODE_SIGNING_ALLOWED=NO build

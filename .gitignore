@@ -23,6 +23,7 @@ Packages/
 
 # Local app bundles / packaging output
 dist/
+Configurations/Local.xcconfig
 
 # Secrets (never commit tokens or signing material)
 .env
