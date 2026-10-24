@@ -17,10 +17,34 @@ public struct GraphQLError: Codable, Sendable, Equatable {
   public let type: String?
   public let path: [String]?
 
+  private enum CodingKeys: String, CodingKey {
+    case message, type, path
+  }
+
   public init(message: String, type: String? = nil, path: [String]? = nil) {
     self.message = message
     self.type = type
     self.path = path
+  }
+
+  /// GitHub error paths mix field names and list indexes (e.g. `["search", "nodes", 0]`); indexes are kept as strings.
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.message = try container.decode(String.self, forKey: .message)
+    self.type = try container.decodeIfPresent(String.self, forKey: .type)
+    if var pathContainer = try? container.nestedUnkeyedContainer(forKey: .path) {
+      var path: [String] = []
+      while !pathContainer.isAtEnd {
+        if let index = try? pathContainer.decode(Int.self) {
+          path.append(String(index))
+        } else {
+          path.append(try pathContainer.decode(String.self))
+        }
+      }
+      self.path = path
+    } else {
+      self.path = nil
+    }
   }
 }
 

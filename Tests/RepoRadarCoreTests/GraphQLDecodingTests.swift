@@ -311,6 +311,31 @@ struct GraphQLDecodingTests {
     #expect(errors[0].path == ["query", "search", "nodes", "badField"])
   }
 
+  @Test("Decodes GraphQL error paths containing list indexes alongside partial data")
+  func decodesErrorPathWithIndexes() throws {
+    let json = """
+      {
+          "errors": [
+              {
+                  "message": "Resource not accessible by integration",
+                  "type": "FORBIDDEN",
+                  "path": ["search", "nodes", 0, "refs"]
+              }
+          ],
+          "data": {
+              "viewer": { "login": "test" },
+              "rateLimit": null,
+              "search": { "repositoryCount": 0, "nodes": [] }
+          }
+      }
+      """.data(using: .utf8)!
+
+    let response = try GraphQLQueryResponse.decode(from: json)
+    #expect(response.data != nil)
+    let error = try #require(response.errors?.first)
+    #expect(error.path == ["search", "nodes", "0", "refs"])
+  }
+
   @Test("Throws DecodingError on invalid JSON or unknown context typename")
   func throwsOnInvalidData() {
     let invalidJSON = "not json".data(using: .utf8)!
