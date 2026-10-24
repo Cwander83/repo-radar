@@ -1,0 +1,138 @@
+# Repo Radar: one query per refresh for every watched repository.
+#
+# $search is a list of repo qualifiers, e.g. "repo:Cwander83/repo-radar repo:Cwander83/gravity-bar".
+# Classification (failing / mine / review requested / stale) happens client-side using viewer.login.
+# Limits: 25 repos per request (search first: 25), 30 open PRs and 100 branches per repo.
+
+query RepoRadar($search: String!) {
+  viewer {
+    login
+  }
+  rateLimit {
+    cost
+    limit
+    remaining
+    resetAt
+  }
+  search(query: $search, type: REPOSITORY, first: 25) {
+    repositoryCount
+    nodes {
+      ... on Repository {
+        nameWithOwner
+        url
+        isPrivate
+        isArchived
+        defaultBranchRef {
+          name
+          target {
+            ...CommitStatus
+          }
+        }
+        mainRef: ref(qualifiedName: "refs/heads/main") {
+          name
+          target {
+            ...CommitStatus
+          }
+        }
+        pullRequests(states: OPEN, first: 30, orderBy: { field: UPDATED_AT, direction: DESC }) {
+          totalCount
+          nodes {
+            number
+            title
+            url
+            isDraft
+            createdAt
+            updatedAt
+            headRefName
+            reviewDecision
+            author {
+              login
+            }
+            reviewRequests(first: 10) {
+              nodes {
+                requestedReviewer {
+                  __typename
+                  ... on User {
+                    login
+                  }
+                  ... on Team {
+                    slug
+                  }
+                }
+              }
+            }
+            commits(last: 1) {
+              nodes {
+                commit {
+                  ...CommitStatus
+                }
+              }
+            }
+          }
+        }
+        # GitHub can't sort branches by commit date (TAG_COMMIT_DATE only applies to tags),
+        # so fetch alphabetically and sort by committedDate client-side.
+        refs(refPrefix: "refs/heads/", first: 100, orderBy: { field: ALPHABETICAL, direction: ASC }) {
+          totalCount
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+          nodes {
+            name
+            branchProtectionRule {
+              id
+            }
+            associatedPullRequests(states: OPEN, first: 1) {
+              totalCount
+            }
+            target {
+              ... on Commit {
+                oid
+                committedDate
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+fragment CommitStatus on GitObject {
+  ... on Commit {
+    oid
+    committedDate
+    url
+    statusCheckRollup {
+      state
+      contexts(first: 25) {
+        totalCount
+        nodes {
+          __typename
+          ... on CheckRun {
+            name
+            status
+            conclusion
+            detailsUrl
+            startedAt
+            completedAt
+            checkSuite {
+              workflowRun {
+                workflow {
+                  name
+                }
+              }
+            }
+          }
+          ... on StatusContext {
+            context
+            state
+            targetUrl
+            createdAt
+          }
+        }
+      }
+    }
+  }
+}
