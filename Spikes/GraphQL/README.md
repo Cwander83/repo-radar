@@ -9,9 +9,9 @@ One GraphQL request per refresh returns everything Repo Radar shows: open PRs an
 | `RepoRadar.graphql` | The query. `$search` is a list of `repo:owner/name` qualifiers. |
 | `run.sh` | Runs the query with the `gh` CLI token: `Spikes/GraphQL/run.sh Cwander83/repo-radar Cwander83/gravity-bar` |
 | `check-token.sh` | Runs the query with a token you paste (hidden) and summarizes what it can see. Use it to test a fine-grained PAT. |
-| `fixtures/recorded-public.json` | Real response for six **public** repos (2026-10-24). No tokens; all data is already public. |
-| `fixtures/synthetic-edge-cases.json` | Hand-written response covering PRs and CI/stale edge cases the public repos don't have. |
-| `fixtures/expected-synthetic-edge-cases.json` | Expected classification for the synthetic fixture, for CHR-75 tests. |
+| `Tests/RepoRadarCoreTests/Fixtures/recorded-public.json` | Real response for six **public** repos (2026-10-24). No tokens; all data is already public. |
+| `Tests/RepoRadarCoreTests/Fixtures/synthetic-edge-cases.json` | Hand-written response covering PRs and CI/stale edge cases the public repos don't have. |
+| `Tests/RepoRadarCoreTests/Fixtures/expected-synthetic-edge-cases.json` | Expected classification for the synthetic fixture, for CHR-75 tests. |
 
 ## Results
 
