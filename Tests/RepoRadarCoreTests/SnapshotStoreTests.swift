@@ -135,7 +135,11 @@ struct SnapshotStoreTests {
         == .serverError(detail: "Internal error"))
     #expect(
       SnapshotStatus(error: .decodingError(detail: "keyNotFound"))
-        == .corrupt(detail: "Failed to decode response: keyNotFound"))
+        == .serverError(detail: "Failed to decode GitHub response: keyNotFound"))
+    #expect(
+      SnapshotRateLimit(
+        rateLimit: RateLimit(cost: 3, limit: 15000, remaining: 14000, resetAt: reset)
+      ) == SnapshotRateLimit(remaining: 14000, limit: 15000, resetAt: reset, cost: 3))
   }
 
   @Test("Atomic write writes file and creates missing parent directory")

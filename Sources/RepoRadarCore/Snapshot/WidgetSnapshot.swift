@@ -54,7 +54,7 @@ public enum SnapshotStatus: Sendable, Equatable {
       let message = errors.map(\.message).joined(separator: "; ")
       self = .serverError(detail: message.isEmpty ? "GraphQL query failed" : message)
     case .decodingError(let detail):
-      self = .corrupt(detail: "Failed to decode response: \(detail)")
+      self = .serverError(detail: "Failed to decode GitHub response: \(detail)")
     }
   }
 }
@@ -146,9 +146,9 @@ public struct SnapshotRateLimit: Codable, Sendable, Equatable {
     self.cost = cost
   }
 
-  public init(rateLimit: RateLimit, limit: Int = 5000) {
+  public init(rateLimit: RateLimit) {
     self.remaining = rateLimit.remaining
-    self.limit = limit
+    self.limit = rateLimit.limit
     self.resetAt = rateLimit.resetAt
     self.cost = rateLimit.cost
   }

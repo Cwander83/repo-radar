@@ -138,34 +138,15 @@ public struct SnapshotStore: Sendable {
 
   /// Reads and parses the snapshot, throwing typed errors if missing, corrupt, or unsupported.
   public func read() throws -> WidgetSnapshot {
-    guard FileManager.default.fileExists(atPath: fileURL.path) else {
+    switch readResult() {
+    case .success(let snapshot):
+      return snapshot
+    case .missing:
       throw SnapshotStoreError.fileNotFound(fileURL)
-    }
-
-    let data: Data
-    do {
-      data = try Data(contentsOf: fileURL)
-    } catch {
-      throw SnapshotStoreError.corrupted(
-        "Unable to read file contents: \(error.localizedDescription)")
-    }
-
-    guard !data.isEmpty else {
-      throw SnapshotStoreError.corrupted("Snapshot file is empty (0 bytes)")
-    }
-
-    // Inspect schema version first
-    let decoder = RepoRadarDecoder.makeDecoder()
-    if let header = try? decoder.decode(SnapshotVersionHeader.self, from: data) {
-      if header.schemaVersion > WidgetSnapshot.currentSchemaVersion {
-        throw SnapshotStoreError.unsupportedSchemaVersion(header.schemaVersion)
-      }
-    }
-
-    do {
-      return try decoder.decode(WidgetSnapshot.self, from: data)
-    } catch {
-      throw SnapshotStoreError.corrupted("Failed to decode snapshot: \(error.localizedDescription)")
+    case .corrupt(let detail):
+      throw SnapshotStoreError.corrupted(detail)
+    case .unsupportedVersion(let version):
+      throw SnapshotStoreError.unsupportedSchemaVersion(version)
     }
   }
 
