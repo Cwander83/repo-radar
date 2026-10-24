@@ -28,6 +28,7 @@ public struct RepoRadarService: Sendable {
   }
 
   /// Convenience initializer targeting the standard App Group configuration and Keychain storage.
+  /// Returns nil if the App Group container or suite is unavailable.
   public init?(
     userDefaults: UserDefaults? = nil,
     appGroupIdentifier: String = SnapshotStore.defaultAppGroupIdentifier,
@@ -36,8 +37,15 @@ public struct RepoRadarService: Sendable {
     keychainAccount: String = KeychainTokenStore.defaultAccount,
     client: GitHubGraphQLClient = GitHubGraphQLClient()
   ) {
-    let defaults = userDefaults ?? UserDefaults(suiteName: appGroupIdentifier) ?? .standard
-    let config = ConfigStore(userDefaults: defaults)
+    let config: ConfigStore
+    if let userDefaults {
+      config = ConfigStore(userDefaults: userDefaults)
+    } else if let appGroupConfig = ConfigStore(suiteName: appGroupIdentifier) {
+      config = appGroupConfig
+    } else {
+      return nil
+    }
+
     let token = KeychainTokenStore(service: keychainService, account: keychainAccount)
     guard
       let snapshot = SnapshotStore(
@@ -85,15 +93,19 @@ public struct RepoRadarService: Sendable {
     // Read authentication token.
     let token: String
     do {
-      guard let storedToken = try tokenStore.read(),
-        !storedToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-      else {
+      let stored = try tokenStore.read()
+      guard let stored, !stored.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
         throw RepoRadarError.tokenMissing
       }
-      token = storedToken
+      token = stored
+    } catch let error as RepoRadarError {
+      let errorStatus = SnapshotStatus(error: error)
+      let errorSnapshot = WidgetSnapshot.empty(status: errorStatus, updatedAt: now)
+      try? snapshotStore.write(errorSnapshot)
+      throw error
     } catch {
-      let radarError = (error as? RepoRadarError) ?? .tokenMissing
-      let errorStatus = SnapshotStatus(error: radarError)
+      let radarError = RepoRadarError.tokenUnauthorized(detail: error.localizedDescription)
+      let errorStatus = SnapshotStatus.tokenError(detail: error.localizedDescription)
       let errorSnapshot = WidgetSnapshot.empty(status: errorStatus, updatedAt: now)
       try? snapshotStore.write(errorSnapshot)
       throw radarError
@@ -143,17 +155,27 @@ public struct RepoRadarService: Sendable {
       shouldPreserveData = false
     }
 
-    if shouldPreserveData, let last = try? snapshotStore.read(), last.status.isOK {
-      return WidgetSnapshot(
-        schemaVersion: last.schemaVersion,
-        updatedAt: last.updatedAt,
-        status: status,
-        failingCI: last.failingCI,
-        runningCI: last.runningCI,
-        pullRequests: last.pullRequests,
-        staleBranches: last.staleBranches,
-        rateLimit: last.rateLimit
-      )
+    if shouldPreserveData, let last = try? snapshotStore.read() {
+      let lastHoldsData: Bool
+      switch last.status {
+      case .ok, .offline, .rateLimited:
+        lastHoldsData = true
+      default:
+        lastHoldsData = false
+      }
+
+      if lastHoldsData {
+        return WidgetSnapshot(
+          schemaVersion: last.schemaVersion,
+          updatedAt: last.updatedAt,
+          status: status,
+          failingCI: last.failingCI,
+          runningCI: last.runningCI,
+          pullRequests: last.pullRequests,
+          staleBranches: last.staleBranches,
+          rateLimit: last.rateLimit
+        )
+      }
     }
 
     return WidgetSnapshot.empty(status: status, updatedAt: now)

@@ -3,6 +3,17 @@ import Testing
 
 @testable import RepoRadarCore
 
+private struct FailingTokenStore: TokenStore {
+  let errorToThrow: any Error
+
+  func read() throws -> String? {
+    throw errorToThrow
+  }
+
+  func save(token: String) throws {}
+  func delete() throws {}
+}
+
 @Suite(.serialized)
 struct RepoRadarServiceTests {
   private func makeMockClient(id: String) -> GitHubGraphQLClient {
@@ -179,8 +190,47 @@ struct RepoRadarServiceTests {
     #expect(diskSnapshot.status == .tokenError(detail: "GitHub personal access token missing"))
   }
 
-  @Test("End-to-end refresh preserves cached data when offline")
-  func endToEndRefreshPreservesCacheOffline() async throws {
+  @Test("Keychain read failure reports tokenError with detail, not tokenMissing")
+  func endToEndRefreshKeychainReadFailure() async throws {
+    let suiteName = "test-reporadar-service-\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suiteName)!
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+
+    let configStore = ConfigStore(userDefaults: defaults)
+    try configStore.save(RepoRadarConfig(watchedRepos: ["Cwander83/repo-radar"]))
+
+    let tokenStore = FailingTokenStore(
+      errorToThrow: KeychainError.osStatus(status: -25300, message: "Decryption failure")
+    )
+    let tempDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("RepoRadarTest-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: tempDir) }
+    let snapshotStore = SnapshotStore(fileURL: tempDir.appendingPathComponent("snapshot.json"))
+
+    let service = RepoRadarService(
+      configStore: configStore,
+      tokenStore: tokenStore,
+      client: makeMockClient(id: UUID().uuidString),
+      snapshotStore: snapshotStore
+    )
+
+    let expectedError = RepoRadarError.tokenUnauthorized(
+      detail: "Keychain error (-25300): Decryption failure"
+    )
+    await #expect(throws: expectedError) {
+      try await service.refresh()
+    }
+
+    let diskSnapshot = try snapshotStore.read()
+    #expect(
+      diskSnapshot.status == .tokenError(detail: "Keychain error (-25300): Decryption failure")
+    )
+  }
+
+  @Test(
+    "End-to-end refresh preserves cached data across consecutive offline runs (ok -> offline -> offline)"
+  )
+  func endToEndRefreshConsecutiveOfflinePreservesCache() async throws {
     let suiteName = "test-reporadar-service-\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suiteName)!
     defer { defaults.removePersistentDomain(forName: suiteName) }
@@ -214,30 +264,48 @@ struct RepoRadarServiceTests {
       return (response, fixtureData)
     }
 
-    let initial = try await service.refresh()
+    let initialTime = try Date("2026-10-24T12:00:00Z", strategy: .iso8601)
+    let initial = try await service.refresh(now: initialTime)
     #expect(initial.status == .ok)
     #expect(!initial.staleBranches.isEmpty)
 
-    // 2. Next refresh fails with offline error
+    // 2. First offline refresh
     MockURLProtocol.registerHandler(id: mockID) { _ in
       throw URLError(.notConnectedToInternet)
     }
-    defer { MockURLProtocol.unregisterHandler(id: mockID) }
 
+    let offlineTime1 = initialTime.addingTimeInterval(300)
     await #expect(throws: RepoRadarError.self) {
-      try await service.refresh()
+      try await service.refresh(now: offlineTime1)
     }
 
-    // 3. Verify snapshot on disk kept cached items but has offline status
-    let diskSnapshot = try snapshotStore.read()
-    if case .offline = diskSnapshot.status {
-      #expect(!diskSnapshot.staleBranches.isEmpty)
+    let diskSnapshot1 = try snapshotStore.read()
+    if case .offline = diskSnapshot1.status {
+      #expect(!diskSnapshot1.staleBranches.isEmpty)
+      #expect(diskSnapshot1.updatedAt == initialTime)  // Preserved original update time
     } else {
-      Issue.record("Expected .offline status with cached data")
+      Issue.record("Expected .offline status with cached data on first failure")
     }
+
+    // 3. Second consecutive offline refresh (must NOT wipe data)
+    let offlineTime2 = offlineTime1.addingTimeInterval(300)
+    await #expect(throws: RepoRadarError.self) {
+      try await service.refresh(now: offlineTime2)
+    }
+
+    let diskSnapshot2 = try snapshotStore.read()
+    if case .offline = diskSnapshot2.status {
+      #expect(!diskSnapshot2.staleBranches.isEmpty)
+      #expect(diskSnapshot2.staleBranches == initial.staleBranches)
+      #expect(diskSnapshot2.updatedAt == initialTime)
+    } else {
+      Issue.record("Expected .offline status to keep cached data on second consecutive failure")
+    }
+
+    MockURLProtocol.unregisterHandler(id: mockID)
   }
 
-  @Test("End-to-end refresh preserves cached data when rate limited")
+  @Test("End-to-end refresh preserves cached data across consecutive rate limited runs")
   func endToEndRefreshPreservesCacheRateLimited() async throws {
     let suiteName = "test-reporadar-service-\(UUID().uuidString)"
     let defaults = UserDefaults(suiteName: suiteName)!
@@ -293,13 +361,32 @@ struct RepoRadarServiceTests {
       try await service.refresh()
     }
 
-    let diskSnapshot = try snapshotStore.read()
-    if case .rateLimited(let resetAt, _) = diskSnapshot.status {
+    let diskSnapshot1 = try snapshotStore.read()
+    if case .rateLimited(let resetAt, _) = diskSnapshot1.status {
       #expect(resetAt != nil)
-      #expect(!diskSnapshot.staleBranches.isEmpty)
+      #expect(!diskSnapshot1.staleBranches.isEmpty)
     } else {
-      Issue.record("Expected .rateLimited status with preserved cache")
+      Issue.record("Expected .rateLimited status with preserved cache on run 1")
     }
+
+    // 3. Second consecutive rate-limited run
+    await #expect(throws: RepoRadarError.self) {
+      try await service.refresh()
+    }
+
+    let diskSnapshot2 = try snapshotStore.read()
+    if case .rateLimited(let resetAt, _) = diskSnapshot2.status {
+      #expect(resetAt != nil)
+      #expect(!diskSnapshot2.staleBranches.isEmpty)
+    } else {
+      Issue.record("Expected .rateLimited status with preserved cache on run 2")
+    }
+  }
+
+  @Test("Convenience init returns nil when App Group is unavailable")
+  func convenienceInitReturnsNilOnUnavailableAppGroup() {
+    let service = RepoRadarService(appGroupIdentifier: "")
+    #expect(service == nil)
   }
 
   @Test(
