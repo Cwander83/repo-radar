@@ -153,9 +153,13 @@ def generate_pbxproj():
 \t\t\t\tTargetAttributes = {
 \t\t\t\t\t000000000000000000000050 = {
 \t\t\t\t\t\tCreatedOnToolsVersion = 16.0;
+\t\t\t\t\t\tDevelopmentTeam = 7P5RMM8JP7;
+\t\t\t\t\t\tProvisioningStyle = Automatic;
 \t\t\t\t\t};
 \t\t\t\t\t000000000000000000000060 = {
 \t\t\t\t\t\tCreatedOnToolsVersion = 16.0;
+\t\t\t\t\t\tDevelopmentTeam = 7P5RMM8JP7;
+\t\t\t\t\t\tProvisioningStyle = Automatic;
 \t\t\t\t\t};
 \t\t\t\t};
 \t\t\t};
@@ -286,6 +290,7 @@ def generate_pbxproj():
 \t\t\tbuildSettings = {
 \t\t\t\tCODE_SIGN_ENTITLEMENTS = HostApp/HostApp.entitlements;
 \t\t\t\tCODE_SIGN_STYLE = Automatic;
+\t\t\t\tDEVELOPMENT_TEAM = 7P5RMM8JP7;
 \t\t\t\tCURRENT_PROJECT_VERSION = 1;
 \t\t\t\tENABLE_PREVIEWS = YES;
 \t\t\t\tGENERATE_INFOPLIST_FILE = YES;
@@ -308,6 +313,7 @@ def generate_pbxproj():
 \t\t\tbuildSettings = {
 \t\t\t\tCODE_SIGN_ENTITLEMENTS = HostApp/HostApp.entitlements;
 \t\t\t\tCODE_SIGN_STYLE = Automatic;
+\t\t\t\tDEVELOPMENT_TEAM = 7P5RMM8JP7;
 \t\t\t\tCURRENT_PROJECT_VERSION = 1;
 \t\t\t\tENABLE_PREVIEWS = YES;
 \t\t\t\tGENERATE_INFOPLIST_FILE = YES;
@@ -330,8 +336,10 @@ def generate_pbxproj():
 \t\t\tbuildSettings = {
 \t\t\t\tCODE_SIGN_ENTITLEMENTS = WidgetExtension/WidgetExtension.entitlements;
 \t\t\t\tCODE_SIGN_STYLE = Automatic;
+\t\t\t\tDEVELOPMENT_TEAM = 7P5RMM8JP7;
 \t\t\t\tCURRENT_PROJECT_VERSION = 1;
 \t\t\t\tGENERATE_INFOPLIST_FILE = YES;
+\t\t\t\tINFOPLIST_FILE = WidgetExtension/Info.plist;
 \t\t\t\tINFOPLIST_KEY_CFBundleDisplayName = SpikeWidget;
 \t\t\t\tINFOPLIST_KEY_NSHumanReadableCopyright = "";
 \t\t\t\tLD_RUNPATH_SEARCH_PATHS = (
@@ -352,8 +360,10 @@ def generate_pbxproj():
 \t\t\tbuildSettings = {
 \t\t\t\tCODE_SIGN_ENTITLEMENTS = WidgetExtension/WidgetExtension.entitlements;
 \t\t\t\tCODE_SIGN_STYLE = Automatic;
+\t\t\t\tDEVELOPMENT_TEAM = 7P5RMM8JP7;
 \t\t\t\tCURRENT_PROJECT_VERSION = 1;
 \t\t\t\tGENERATE_INFOPLIST_FILE = YES;
+\t\t\t\tINFOPLIST_FILE = WidgetExtension/Info.plist;
 \t\t\t\tINFOPLIST_KEY_CFBundleDisplayName = SpikeWidget;
 \t\t\t\tINFOPLIST_KEY_NSHumanReadableCopyright = "";
 \t\t\t\tLD_RUNPATH_SEARCH_PATHS = (

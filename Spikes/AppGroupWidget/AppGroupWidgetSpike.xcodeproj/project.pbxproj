@@ -149,9 +149,13 @@
 				TargetAttributes = {
 					000000000000000000000050 = {
 						CreatedOnToolsVersion = 16.0;
+						DevelopmentTeam = 7P5RMM8JP7;
+						ProvisioningStyle = Automatic;
 					};
 					000000000000000000000060 = {
 						CreatedOnToolsVersion = 16.0;
+						DevelopmentTeam = 7P5RMM8JP7;
+						ProvisioningStyle = Automatic;
 					};
 				};
 			};
@@ -282,6 +286,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = HostApp/HostApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 7P5RMM8JP7;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -304,6 +309,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = HostApp/HostApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 7P5RMM8JP7;
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -326,8 +332,10 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = WidgetExtension/WidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 7P5RMM8JP7;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = WidgetExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = SpikeWidget;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -348,8 +356,10 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = WidgetExtension/WidgetExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 7P5RMM8JP7;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = WidgetExtension/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = SpikeWidget;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (

@@ -32,3 +32,19 @@ This spike validates whether a sandboxed macOS host app and its WidgetKit extens
    - Add the widget to your desktop.
    - Observe if the widget displays the message and timestamp written by the host app.
    - Click the **Open GitHub ↗** link on the widget to test if it opens the browser.
+
+
+## Results
+
+1. **App Group with Free Personal Team:**
+   - **Works:** Xcode provisioned both targets automatically using Personal Team `7P5RMM8JP7` (`Chris Wander (Personal Team)`).
+   - **Group ID:** `group.com.chriswander.reporadar` works directly without `<TEAMID>.` prefix.
+   - Container was created at `/Users/chriswander/Library/Group Containers/group.com.chriswander.reporadar`.
+   - Host app successfully wrote `spike-payload.json` inside the container (`{"timestamp": "2026-10-24T22:32:42Z", "message": "Hello from Host App!"}`).
+2. **WidgetKit Extension Recognition:**
+   - Plugin point `com.apple.widgetkit-extension` verified via `pluginkit`.
+   - `SpikeWidgetExtension` registered and recognized by macOS Notification Center / Desktop Widget Gallery.
+3. **Link to HTTPS:**
+   - Widget includes `Link(destination: URL(string: "https://github.com/Cwander83/repo-radar")!)`. Clicking opens default browser on macOS.
+4. **Free Signing Lifetime:**
+   - Provisioning profile (`embedded.provisionprofile`) has an expiration date of **7 days** from creation (`ExpirationDate: 2026-10-31T22:29:48Z`), standard for Apple free developer accounts.

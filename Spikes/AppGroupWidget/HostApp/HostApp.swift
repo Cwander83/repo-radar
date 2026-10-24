@@ -41,6 +41,9 @@ struct ContentView: View {
     }
     .padding(30)
     .frame(minWidth: 440, minHeight: 260)
+    .onAppear {
+      writeToContainer()
+    }
   }
 
   func writeToContainer() {
