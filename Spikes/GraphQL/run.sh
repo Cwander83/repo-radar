@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run the Repo Radar query with the gh CLI's token.
-# Usage: Spikes/GraphQL/run.sh owner/repo [owner/repo ...] > out.json
+# Usage: Spikes/GraphQL/run.sh owner/repo [owner/repo ...] > Tests/RepoRadarCoreTests/Fixtures/recorded-public.json
 set -euo pipefail
 
 if [ "$#" -eq 0 ]; then

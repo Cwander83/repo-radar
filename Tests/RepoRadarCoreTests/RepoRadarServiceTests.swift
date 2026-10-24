@@ -26,29 +26,7 @@ struct RepoRadarServiceTests {
   }
 
   private func loadRecordedPublicFixture() throws -> Data {
-    #if SWIFT_PACKAGE
-      if let url = Bundle.module.url(
-        forResource: "recorded-public",
-        withExtension: "json",
-        subdirectory: "Fixtures"
-      ) {
-        return try Data(contentsOf: url)
-      }
-      if let url = Bundle.module.url(forResource: "recorded-public", withExtension: "json") {
-        return try Data(contentsOf: url)
-      }
-    #endif
-
-    let thisFile = URL(fileURLWithPath: #filePath)
-    let packageRoot =
-      thisFile
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-    let fallback =
-      packageRoot
-      .appendingPathComponent("Spikes/GraphQL/fixtures/recorded-public.json")
-    return try Data(contentsOf: fallback)
+    try TestFixtures.loadData(named: "recorded-public")
   }
 
   @Test("End-to-end refresh loads config, fetches fixture, classifies, and writes snapshot")

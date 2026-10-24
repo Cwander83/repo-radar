@@ -5,27 +5,7 @@ import Testing
 
 struct GraphQLDecodingTests {
   private func loadFixture(named name: String) throws -> Data {
-    #if SWIFT_PACKAGE
-      if let url = Bundle.module.url(
-        forResource: name, withExtension: "json", subdirectory: "Fixtures")
-      {
-        return try Data(contentsOf: url)
-      }
-      if let url = Bundle.module.url(forResource: name, withExtension: "json") {
-        return try Data(contentsOf: url)
-      }
-    #endif
-
-    let thisFile = URL(fileURLWithPath: #filePath)
-    let packageRoot =
-      thisFile
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-    let fallback =
-      packageRoot
-      .appendingPathComponent("Spikes/GraphQL/fixtures/\(name).json")
-    return try Data(contentsOf: fallback)
+    try TestFixtures.loadData(named: name)
   }
 
   @Test("Decodes recorded public repository fixture")
