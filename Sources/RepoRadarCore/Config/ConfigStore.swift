@@ -24,20 +24,12 @@ public struct ConfigStore: @unchecked Sendable {
     self.userDefaults = userDefaults
   }
 
-  /// Creates a ConfigStore with an App Group suite name.
-  public init?(suiteName: String) {
+  /// Creates a ConfigStore with an App Group suite name, or nil if the suite is unavailable.
+  public init?(suiteName: String = defaultSuiteName) {
     guard let defaults = UserDefaults(suiteName: suiteName) else {
       return nil
     }
     self.userDefaults = defaults
-  }
-
-  /// Factory method to access the App Group configuration store.
-  public static func appGroup(suiteName: String = defaultSuiteName) -> ConfigStore {
-    if let defaults = UserDefaults(suiteName: suiteName) {
-      return ConfigStore(userDefaults: defaults)
-    }
-    return ConfigStore(userDefaults: .standard)
   }
 
   /// Loads configuration from UserDefaults, falling back to defaults for missing keys.

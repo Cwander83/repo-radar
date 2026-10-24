@@ -102,12 +102,6 @@ public struct RepoRadarConfig: Codable, Sendable, Equatable {
   /// Whether to show the failing CI count badge in the menu bar.
   public var showMenuBarCount: Bool
 
-  /// Convenience alias for showMenuBarCount.
-  public var menuBarCount: Bool {
-    get { showMenuBarCount }
-    set { showMenuBarCount = newValue }
-  }
-
   /// Whether to trigger a local notification when CI status changes to failing.
   public var ciNotifications: Bool
 

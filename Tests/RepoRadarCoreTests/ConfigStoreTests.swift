@@ -22,7 +22,6 @@ struct ConfigStoreTests {
     #expect(config.refreshOnWake == true)
     #expect(config.launchAtLogin == false)
     #expect(config.showMenuBarCount == true)
-    #expect(config.menuBarCount == true)
     #expect(config.ciNotifications == false)
   }
 
