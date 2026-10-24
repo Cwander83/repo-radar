@@ -4,7 +4,7 @@ import RepoRadarCore
 public final class FakeClock: ClockProtocol, @unchecked Sendable {
   private let lock = NSLock()
   private var _now: Date
-  private var scheduled: [(deadline: Date, continuation: CheckedContinuation<Void, Error>)] = []
+  private var scheduled: [(id: UUID, deadline: Date, continuation: CheckedContinuation<Void, Error>)] = []
   private var _sleepCallCount: Int = 0
   private var _lastSleepRequestedDuration: TimeInterval?
 
@@ -35,12 +35,12 @@ public final class FakeClock: ClockProtocol, @unchecked Sendable {
   }
 
   public func sleep(seconds: TimeInterval) async throws {
-    try await withCheckedThrowingContinuation { continuation in
+    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
       lock.lock()
       _sleepCallCount += 1
       _lastSleepRequestedDuration = seconds
       let deadline = _now.addingTimeInterval(seconds)
-      scheduled.append((deadline: deadline, continuation: continuation))
+      scheduled.append((id: UUID(), deadline: deadline, continuation: continuation))
       scheduled.sort { $0.deadline < $1.deadline }
       lock.unlock()
     }

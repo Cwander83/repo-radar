@@ -30,6 +30,9 @@ public final class RefreshScheduler: ObservableObject {
   /// Number of consecutive offline failures, used for exponential backoff.
   public private(set) var consecutiveOfflineCount: Int = 0
 
+  /// Whether the periodic background refresh loop is currently running.
+  @Published public private(set) var isRunning: Bool = false
+
   /// Active background loop task.
   private var timerTask: Task<Void, Never>?
 
@@ -125,7 +128,8 @@ public final class RefreshScheduler: ObservableObject {
 
   /// Starts periodic background refreshing if not already running.
   public func start() {
-    guard timerTask == nil else { return }
+    guard !isRunning else { return }
+    isRunning = true
     timerTask = Task { [weak self] in
       await self?.runLoop(skipInitialRefresh: false)
     }
@@ -133,6 +137,7 @@ public final class RefreshScheduler: ObservableObject {
 
   /// Stops periodic background refreshing.
   public func stop() {
+    isRunning = false
     timerTask?.cancel()
     timerTask = nil
   }
@@ -238,6 +243,7 @@ public final class RefreshScheduler: ObservableObject {
   }
 
   private func restartTimer() {
+    guard isRunning else { return }
     timerTask?.cancel()
     timerTask = Task { [weak self] in
       await self?.runLoop(skipInitialRefresh: true)

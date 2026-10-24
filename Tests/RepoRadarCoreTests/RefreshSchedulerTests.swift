@@ -326,4 +326,49 @@ struct RefreshSchedulerTests {
     #expect(scheduler.consecutiveOfflineCount == 3)
     #expect(scheduler.computeDelay(after: scheduler.lastError) == 240)
   }
+
+  @Test("refreshNow does not restart periodic timer after stop")
+  func testRefreshNowDoesNotRestartAfterStop() async throws {
+    let ctx = try TestContext(pollInterval: .fiveMinutes)
+    defer { ctx.cleanup() }
+
+    let fixtureData = try loadRecordedPublicFixture()
+    final class QueryCounter: @unchecked Sendable {
+      var count = 0
+    }
+    let counter = QueryCounter()
+
+    MockURLProtocol.registerHandler(id: ctx.mockID) { _ in
+      counter.count += 1
+      let response = HTTPURLResponse(
+        url: URL(string: "https://api.github.com/graphql")!,
+        statusCode: 200,
+        httpVersion: nil,
+        headerFields: ["Content-Type": "application/json"]
+      )!
+      return (response, fixtureData)
+    }
+
+    let fakeClock = FakeClock()
+    let scheduler = RefreshScheduler(service: ctx.service, clock: fakeClock)
+
+    scheduler.start()
+    #expect(scheduler.isRunning == true)
+    try await fakeClock.waitForSleepCalls(count: 1)
+    #expect(counter.count == 1)
+
+    scheduler.stop()
+    #expect(scheduler.isRunning == false)
+
+    let sleepCallsBefore = fakeClock.sleepCallCount
+
+    // Trigger manual refresh while stopped
+    let snap = try await scheduler.refreshNow()
+    #expect(snap.status == .ok)
+    #expect(counter.count == 2)
+    #expect(scheduler.isRunning == false)
+
+    // Ensure no further sleeps are scheduled after stop
+    #expect(fakeClock.sleepCallCount == sleepCallsBefore)
+  }
 }
