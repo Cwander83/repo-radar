@@ -246,4 +246,49 @@ struct ConfigStoreTests {
     #expect(PollInterval.fiveMinutes < PollInterval.tenMinutes)
     #expect(PollInterval.tenMinutes < PollInterval.fifteenMinutes)
   }
+
+  @Test("Watched repositories cap at 25 in validation")
+  func watchedReposCappedAt25() {
+    let repos25 = (1...25).map { "owner/repo\($0)" }
+    var config = RepoRadarConfig.default
+    config.watchedRepos = repos25
+    #expect(throws: Never.self) {
+      try config.validate()
+    }
+
+    let repos26 = (1...26).map { "owner/repo\($0)" }
+    config.watchedRepos = repos26
+    let expectedError = ConfigValidationError.tooManyRepos(count: 26, max: 25)
+    #expect(throws: expectedError) {
+      try config.validate()
+    }
+    #expect(expectedError.description == "Maximum of 25 watched repositories allowed (got 26).")
+  }
+
+  @Test("Adding 26th repo throws tooManyRepos error")
+  func adding26thRepoThrows() throws {
+    let (defaults, suite) = makeTestDefaults()
+    defer { defaults.removePersistentDomain(forName: suite) }
+
+    let store = ConfigStore(userDefaults: defaults)
+    let repos25 = (1...25).map { "owner/repo\($0)" }
+    var config = RepoRadarConfig.default
+    config.watchedRepos = repos25
+    try store.save(config)
+
+    #expect(throws: ConfigValidationError.tooManyRepos(count: 26, max: 25)) {
+      try store.addWatchedRepo("owner/repo26")
+    }
+
+    #expect(store.load().watchedRepos.count == 25)
+  }
+
+  @Test("Sanitized config clamps watched repos to 25")
+  func sanitizedClampsTo25Repos() {
+    let repos30 = (1...30).map { "owner/repo\($0)" }
+    let dirty = RepoRadarConfig(watchedRepos: repos30)
+    let clean = dirty.sanitized()
+    #expect(clean.watchedRepos.count == 25)
+    #expect(clean.watchedRepos == Array(repos30.prefix(25)))
+  }
 }
