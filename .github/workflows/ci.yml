@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build & Test (macOS)
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Show toolchain versions
+        run: |
+          swift --version
+          xcodebuild -version
+
+      # No Swift sources yet (Phase 0). Steps below run once a package or Xcode project exists.
+      - name: Build & Test Swift Package
+        if: hashFiles('Package.swift') != ''
+        run: |
+          swift build -v
+          swift test
+
+      # TODO(phase-1): add an xcodebuild build/test step once the .xcodeproj and scheme exist.

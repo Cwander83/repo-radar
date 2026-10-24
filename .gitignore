@@ -1,0 +1,47 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Xcode
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcscmblueprint
+*.moved-aside
+*.xcarchive
+*.dSYM
+*.dSYM.zip
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/
+
+# Local app bundles / packaging output
+dist/
+
+# Secrets (never commit tokens or signing material)
+.env
+.env.*
+*.token
+*.key
+*.pem
+*.p12
+*.mobileprovision
+*.provisionprofile
+credentials.json
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Local-only: agent instructions, planning docs, tool state
+AGENTS.md
+CLAUDE.md
+docs/
+.claude/
+.mcp.json
+graphify-out/
