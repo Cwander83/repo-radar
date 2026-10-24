@@ -2,7 +2,24 @@ import Foundation
 
 /// Stubbed URLProtocol for zero-network testing with URLSession.
 final class MockURLProtocol: URLProtocol, @unchecked Sendable {
+  private static let lock = NSLock()
+  nonisolated(unsafe) private static var handlers:
+    [String: (URLRequest) throws -> (HTTPURLResponse, Data)] = [:]
   nonisolated(unsafe) static var requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
+
+  static func registerHandler(
+    id: String, handler: @escaping (URLRequest) throws -> (HTTPURLResponse, Data)
+  ) {
+    lock.lock()
+    defer { lock.unlock() }
+    handlers[id] = handler
+  }
+
+  static func unregisterHandler(id: String) {
+    lock.lock()
+    defer { lock.unlock() }
+    handlers.removeValue(forKey: id)
+  }
 
   override class func canInit(with request: URLRequest) -> Bool {
     true
@@ -13,7 +30,16 @@ final class MockURLProtocol: URLProtocol, @unchecked Sendable {
   }
 
   override func startLoading() {
-    guard let handler = MockURLProtocol.requestHandler else {
+    let handler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
+    if let mockID = request.value(forHTTPHeaderField: "X-Mock-Handler-ID") {
+      MockURLProtocol.lock.lock()
+      handler = MockURLProtocol.handlers[mockID]
+      MockURLProtocol.lock.unlock()
+    } else {
+      handler = MockURLProtocol.requestHandler
+    }
+
+    guard let handler else {
       client?.urlProtocol(self, didFailWithError: URLError(.unknown))
       return
     }
