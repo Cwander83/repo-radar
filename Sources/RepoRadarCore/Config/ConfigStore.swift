@@ -20,7 +20,7 @@ public struct ConfigStore: @unchecked Sendable {
   public let userDefaults: UserDefaults
 
   /// Creates a ConfigStore with a specific UserDefaults instance.
-  public init(userDefaults: UserDefaults = .standard) {
+  public init(userDefaults: UserDefaults) {
     self.userDefaults = userDefaults
   }
 
