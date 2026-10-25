@@ -160,4 +160,51 @@ public enum RepoRadarQuery {
       }
     }
     """
+
+  /// GraphQL query for fetching repositories accessible to the authenticated viewer.
+  public static let viewerRepositoriesQuery = """
+    query ViewerRepositories($after: String) {
+      viewer {
+        repositories(
+          first: 100
+          after: $after
+          affiliations: [OWNER, COLLABORATOR, ORGANIZATION_MEMBER]
+          orderBy: { field: PUSHED_AT, direction: DESC }
+        ) {
+          nodes {
+            nameWithOwner
+            isPrivate
+            isArchived
+            pushedAt
+            defaultBranchRef {
+              name
+            }
+          }
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+        }
+      }
+    }
+    """
+
+  /// Request body payload for the viewer repositories query.
+  public struct ViewerRepositoriesRequestBody: Codable, Sendable {
+    public let query: String
+    public let variables: Variables
+
+    public struct Variables: Codable, Sendable {
+      public let after: String?
+
+      public init(after: String? = nil) {
+        self.after = after
+      }
+    }
+
+    public init(query: String = RepoRadarQuery.viewerRepositoriesQuery, after: String? = nil) {
+      self.query = query
+      self.variables = Variables(after: after)
+    }
+  }
 }

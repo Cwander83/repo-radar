@@ -536,3 +536,67 @@ public struct AssociatedPullRequests: Codable, Sendable, Equatable {
     self.totalCount = totalCount
   }
 }
+
+/// A repository returned by the viewer repositories query.
+public struct ViewerRepositoryNode: Codable, Sendable, Equatable, Identifiable {
+  public var id: String { nameWithOwner }
+  public let nameWithOwner: String
+  public let isPrivate: Bool
+  public let isArchived: Bool
+  public let pushedAt: Date?
+  public let defaultBranchRef: RefBranch?
+
+  public init(
+    nameWithOwner: String,
+    isPrivate: Bool,
+    isArchived: Bool,
+    pushedAt: Date? = nil,
+    defaultBranchRef: RefBranch? = nil
+  ) {
+    self.nameWithOwner = nameWithOwner
+    self.isPrivate = isPrivate
+    self.isArchived = isArchived
+    self.pushedAt = pushedAt
+    self.defaultBranchRef = defaultBranchRef
+  }
+}
+
+/// The repositories connection for viewer query.
+public struct ViewerRepositoriesConnection: Codable, Sendable, Equatable {
+  public let nodes: [ViewerRepositoryNode]
+  public let pageInfo: PageInfo
+
+  public init(nodes: [ViewerRepositoryNode], pageInfo: PageInfo) {
+    self.nodes = nodes
+    self.pageInfo = pageInfo
+  }
+}
+
+/// Response data wrapper for the viewer repositories query.
+public struct ViewerRepositoriesData: Codable, Sendable, Equatable {
+  public struct ViewerPayload: Codable, Sendable, Equatable {
+    public let repositories: ViewerRepositoriesConnection
+
+    public init(repositories: ViewerRepositoriesConnection) {
+      self.repositories = repositories
+    }
+  }
+
+  public let viewer: ViewerPayload
+
+  public init(viewer: ViewerPayload) {
+    self.viewer = viewer
+  }
+}
+
+/// Top-level response for the viewer repositories GraphQL query.
+public struct ViewerRepositoriesResponse: Codable, Sendable, Equatable {
+  public let data: ViewerRepositoriesData?
+  public let errors: [GraphQLError]?
+
+  public init(data: ViewerRepositoriesData?, errors: [GraphQLError]? = nil) {
+    self.data = data
+    self.errors = errors
+  }
+}
+

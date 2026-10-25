@@ -17,6 +17,8 @@ public enum RepoAccessStatus: String, Equatable, Sendable {
 @MainActor
 public final class RepositoriesSettingsViewModel: ObservableObject {
   public let configStore: ConfigStore
+  public let tokenStore: (any TokenStore)?
+  public let client: GitHubGraphQLClient
   public var onConfigChange: ((RepoRadarConfig) -> Void)?
   public var onRefreshRequest: (() -> Void)?
 
@@ -34,14 +36,23 @@ public final class RepositoriesSettingsViewModel: ObservableObject {
   @Published public var newRepoInput: String = ""
   @Published public var errorMessage: String?
 
+  /// Whether a GitHub PAT exists in the token store.
+  public var hasToken: Bool {
+    tokenStore?.hasToken() ?? false
+  }
+
   public init(
     configStore: ConfigStore,
+    tokenStore: (any TokenStore)? = nil,
+    client: GitHubGraphQLClient = GitHubGraphQLClient(),
     snapshot: WidgetSnapshot? = nil,
     snapshotPublisher: AnyPublisher<WidgetSnapshot?, Never>? = nil,
     onConfigChange: ((RepoRadarConfig) -> Void)? = nil,
     onRefreshRequest: (() -> Void)? = nil
   ) {
     self.configStore = configStore
+    self.tokenStore = tokenStore
+    self.client = client
     self.onConfigChange = onConfigChange
     self.onRefreshRequest = onRefreshRequest
 
@@ -68,12 +79,15 @@ public final class RepositoriesSettingsViewModel: ObservableObject {
 
   public convenience init(
     configStore: ConfigStore,
+    tokenStore: (any TokenStore)? = nil,
     scheduler: RefreshScheduler?,
     onConfigChange: ((RepoRadarConfig) -> Void)? = nil,
     onRefreshRequest: (() -> Void)? = nil
   ) {
     self.init(
       configStore: configStore,
+      tokenStore: tokenStore ?? scheduler?.service.tokenStore,
+      client: scheduler?.service.client ?? GitHubGraphQLClient(),
       snapshot: scheduler?.latestSnapshot,
       snapshotPublisher: scheduler?.$latestSnapshot.eraseToAnyPublisher(),
       onConfigChange: onConfigChange,
@@ -155,6 +169,32 @@ public final class RepositoriesSettingsViewModel: ObservableObject {
     reload()
     onConfigChange?(configStore.load())
     onRefreshRequest?()
+  }
+
+  /// Replaces watched repositories with a new list, capping at 25 and triggering refresh.
+  public func updateWatchedRepos(_ newRepos: [String]) {
+    errorMessage = nil
+    var config = configStore.load()
+    config.watchedRepos = Array(newRepos.prefix(RepoRadarConfig.maxWatchedRepos))
+    configStore.save(sanitizing: config)
+    reload()
+    onConfigChange?(configStore.load())
+    onRefreshRequest?()
+  }
+
+  /// Creates a configured RepositoryPickerViewModel wired to update watched repositories on save.
+  public func makePickerViewModel(
+    fetcher: RepositoryPickerViewModel.RepositoriesFetcher? = nil
+  ) -> RepositoryPickerViewModel {
+    RepositoryPickerViewModel(
+      configStore: configStore,
+      tokenStore: tokenStore ?? InMemoryTokenStore(),
+      client: client,
+      fetcher: fetcher,
+      onSave: { [weak self] selected in
+        self?.updateWatchedRepos(selected)
+      }
+    )
   }
 
   /// Reloads watched repos and stale threshold from config store.
