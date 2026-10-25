@@ -99,11 +99,79 @@ public final class GitHubGraphQLClient: Sendable {
     )
   }
 
+  /// Fetches every repository the token can read, paginating until all pages are retrieved.
+  public func fetchViewerRepositories(
+    token: String
+  ) async throws -> [ViewerRepositoryNode] {
+    var allRepos: [ViewerRepositoryNode] = []
+    var cursor: String? = nil
+
+    while true {
+      let (pageData, _) = try await executeViewerRepositoriesPage(after: cursor, token: token)
+      let connection = pageData.viewer.repositories
+      allRepos.append(contentsOf: connection.nodes)
+      guard connection.pageInfo.hasNextPage,
+            let nextCursor = connection.pageInfo.endCursor,
+            !nextCursor.isEmpty else {
+        break
+      }
+      cursor = nextCursor
+    }
+
+    return allRepos
+  }
+
+  /// Executes a single page of the viewer repositories query.
+  private func executeViewerRepositoriesPage(
+    after: String?,
+    token: String
+  ) async throws -> (data: ViewerRepositoriesData, httpResponse: HTTPURLResponse) {
+    let body = RepoRadarQuery.ViewerRepositoriesRequestBody(after: after)
+    let (data, httpResponse) = try await sendGraphQLRequest(body: body, token: token)
+
+    let pageResponse: ViewerRepositoriesResponse
+    do {
+      pageResponse = try RepoRadarDecoder.makeDecoder().decode(ViewerRepositoriesResponse.self, from: data)
+    } catch {
+      throw RepoRadarError.decodingError(detail: error.localizedDescription)
+    }
+
+    guard let responseData = pageResponse.data else {
+      try handleGraphQLErrors(pageResponse.errors, httpResponse: httpResponse)
+      throw RepoRadarError.decodingError(detail: "Empty GraphQL response data.")
+    }
+
+    return (responseData, httpResponse)
+  }
+
   /// Internal request execution sharing error mapping across fetch and validation paths.
   private func execute(
     search: String,
     token: String
   ) async throws -> (response: GraphQLQueryResponse, httpResponse: HTTPURLResponse) {
+    let body = RepoRadarQuery.RequestBody(search: search)
+    let (data, httpResponse) = try await sendGraphQLRequest(body: body, token: token)
+
+    let queryResponse: GraphQLQueryResponse
+    do {
+      queryResponse = try RepoRadarDecoder.decode(from: data)
+    } catch {
+      throw RepoRadarError.decodingError(detail: error.localizedDescription)
+    }
+
+    guard queryResponse.data != nil else {
+      try handleGraphQLErrors(queryResponse.errors, httpResponse: httpResponse)
+      throw RepoRadarError.decodingError(detail: "Empty GraphQL response data.")
+    }
+
+    return (queryResponse, httpResponse)
+  }
+
+  /// Sends an authenticated GraphQL POST request, handling HTTP status codes and error mapping.
+  private func sendGraphQLRequest<RequestBody: Encodable>(
+    body: RequestBody,
+    token: String
+  ) async throws -> (data: Data, httpResponse: HTTPURLResponse) {
     let trimmedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmedToken.isEmpty else {
       throw RepoRadarError.tokenMissing
@@ -116,7 +184,6 @@ public final class GitHubGraphQLClient: Sendable {
     request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
     request.setValue("RepoRadar", forHTTPHeaderField: "User-Agent")
 
-    let body = RepoRadarQuery.RequestBody(search: search)
     do {
       request.httpBody = try JSONEncoder().encode(body)
     } catch {
@@ -160,34 +227,7 @@ public final class GitHubGraphQLClient: Sendable {
 
     switch httpResponse.statusCode {
     case 200:
-      let queryResponse: GraphQLQueryResponse
-      do {
-        queryResponse = try RepoRadarDecoder.decode(from: data)
-      } catch {
-        throw RepoRadarError.decodingError(detail: error.localizedDescription)
-      }
-
-      // If data is null, inspect errors
-      if queryResponse.data == nil {
-        if let errors = queryResponse.errors, !errors.isEmpty {
-          for error in errors {
-            let msg = error.message.lowercased()
-            if msg.contains("bad credentials") || msg.contains("resource not accessible")
-              || msg.contains("requires authentication")
-            {
-              throw RepoRadarError.tokenUnauthorized(detail: error.message)
-            }
-            if error.type == "RATE_LIMITED" || msg.contains("rate limit") {
-              throw RepoRadarError.rateLimited(resetAt: headerResetAt)
-            }
-          }
-          throw RepoRadarError.graphQL(errors: errors)
-        } else {
-          throw RepoRadarError.decodingError(detail: "Empty GraphQL response data.")
-        }
-      }
-
-      return (queryResponse, httpResponse)
+      return (data, httpResponse)
 
     case 401:
       throw RepoRadarError.tokenUnauthorized(detail: bodyMessage ?? "Bad credentials")
@@ -214,5 +254,33 @@ public final class GitHubGraphQLClient: Sendable {
         bodyMessage ?? HTTPURLResponse.localizedString(forStatusCode: httpResponse.statusCode)
       throw RepoRadarError.serverError(statusCode: httpResponse.statusCode, detail: detail)
     }
+  }
+
+  /// Inspects GraphQL error array and maps known error patterns to RepoRadarErrors.
+  private func handleGraphQLErrors(
+    _ errors: [GraphQLError]?,
+    httpResponse: HTTPURLResponse
+  ) throws {
+    guard let errors, !errors.isEmpty else { return }
+
+    var headerResetAt: Date?
+    if let resetHeader = httpResponse.value(forHTTPHeaderField: "x-ratelimit-reset"),
+      let epochSeconds = TimeInterval(resetHeader)
+    {
+      headerResetAt = Date(timeIntervalSince1970: epochSeconds)
+    }
+
+    for error in errors {
+      let msg = error.message.lowercased()
+      if msg.contains("bad credentials") || msg.contains("resource not accessible")
+        || msg.contains("requires authentication")
+      {
+        throw RepoRadarError.tokenUnauthorized(detail: error.message)
+      }
+      if error.type == "RATE_LIMITED" || msg.contains("rate limit") {
+        throw RepoRadarError.rateLimited(resetAt: headerResetAt)
+      }
+    }
+    throw RepoRadarError.graphQL(errors: errors)
   }
 }

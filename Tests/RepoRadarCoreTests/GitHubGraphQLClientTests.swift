@@ -511,4 +511,118 @@ struct GitHubGraphQLClientTests {
         == "repo:Cwander83/repo-radar repo:Cwander83/gravity-bar repo:Cwander83/workout-tracker"
     )
   }
+
+  @Test("fetchViewerRepositories decodes repositories and paginates across pages")
+  func testFetchViewerRepositoriesPagination() async throws {
+    let (client, endpoint) = makeClient()
+
+    let page1JSON = """
+    {
+      "data": {
+        "viewer": {
+          "repositories": {
+            "nodes": [
+              {
+                "nameWithOwner": "owner/repo-1",
+                "isPrivate": false,
+                "isArchived": false,
+                "pushedAt": "2026-10-25T12:00:00Z",
+                "defaultBranchRef": { "name": "main" }
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": true,
+              "endCursor": "cursor-page-1"
+            }
+          }
+        }
+      }
+    }
+    """
+
+    let page2JSON = """
+    {
+      "data": {
+        "viewer": {
+          "repositories": {
+            "nodes": [
+              {
+                "nameWithOwner": "owner/repo-2",
+                "isPrivate": true,
+                "isArchived": true,
+                "pushedAt": "2026-10-20T12:00:00Z",
+                "defaultBranchRef": null
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": false,
+              "endCursor": "cursor-page-2"
+            }
+          }
+        }
+      }
+    }
+    """
+
+    var pageCount = 0
+    MockURLProtocol.requestHandler = { request in
+      pageCount += 1
+      let bodyData = try #require(request.bodyData)
+      let body = try JSONDecoder().decode(RepoRadarQuery.ViewerRepositoriesRequestBody.self, from: bodyData)
+
+      let responseData: Data
+      if pageCount == 1 {
+        #expect(body.variables.after == nil)
+        responseData = page1JSON.data(using: .utf8)!
+      } else {
+        #expect(body.variables.after == "cursor-page-1")
+        responseData = page2JSON.data(using: .utf8)!
+      }
+
+      let response = HTTPURLResponse(
+        url: endpoint,
+        statusCode: 200,
+        httpVersion: nil,
+        headerFields: ["Content-Type": "application/json"]
+      )!
+      return (response, responseData)
+    }
+
+    let repos = try await client.fetchViewerRepositories(token: "valid-token")
+
+    #expect(repos.count == 2)
+    #expect(repos[0].nameWithOwner == "owner/repo-1")
+    #expect(repos[0].isPrivate == false)
+    #expect(repos[0].isArchived == false)
+    #expect(repos[0].defaultBranchRef?.name == "main")
+    #expect(repos[1].nameWithOwner == "owner/repo-2")
+    #expect(repos[1].isPrivate == true)
+    #expect(repos[1].isArchived == true)
+    #expect(repos[1].defaultBranchRef == nil)
+    #expect(pageCount == 2)
+  }
+
+  @Test("fetchViewerRepositories throws tokenUnauthorized on 401")
+  func testFetchViewerRepositories401() async {
+    let (client, endpoint) = makeClient()
+    MockURLProtocol.requestHandler = { _ in
+      let response = HTTPURLResponse(
+        url: endpoint,
+        statusCode: 401,
+        httpVersion: nil,
+        headerFields: nil
+      )!
+      let data = "{\"message\": \"Bad credentials\"}".data(using: .utf8)!
+      return (response, data)
+    }
+
+    do {
+      _ = try await client.fetchViewerRepositories(token: "bad-token")
+      Issue.record("Expected tokenUnauthorized error")
+    } catch let error as RepoRadarError {
+      #expect(error == .tokenUnauthorized(detail: "Bad credentials"))
+    } catch {
+      Issue.record("Unexpected error: \(error)")
+    }
+  }
 }

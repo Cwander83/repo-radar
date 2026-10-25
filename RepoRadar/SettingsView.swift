@@ -98,8 +98,10 @@ public struct SettingsView: View {
 
       RepositoriesSettingsView(
         configStore: configStore,
+        tokenStore: tokenStore,
         snapshot: snapshot,
         snapshotPublisher: snapshotPublisher,
+        onNavigateToGitHub: { selectedTab = .github },
         onConfigChange: onConfigChange,
         onRefreshRequest: onRefreshRequest
       )
@@ -212,23 +214,34 @@ public struct GeneralSettingsView: View {
 public struct RepositoriesSettingsView: View {
   @StateObject private var viewModel: RepositoriesSettingsViewModel
   private let snapshot: WidgetSnapshot?
+  public var onNavigateToGitHub: (() -> Void)?
+  @State private var isPickerPresented: Bool = false
 
-  public init(viewModel: RepositoriesSettingsViewModel, snapshot: WidgetSnapshot? = nil) {
+  public init(
+    viewModel: RepositoriesSettingsViewModel,
+    snapshot: WidgetSnapshot? = nil,
+    onNavigateToGitHub: (() -> Void)? = nil
+  ) {
     self._viewModel = StateObject(wrappedValue: viewModel)
     self.snapshot = snapshot
+    self.onNavigateToGitHub = onNavigateToGitHub
   }
 
   public init(
     configStore: ConfigStore,
+    tokenStore: (any TokenStore)? = nil,
     snapshot: WidgetSnapshot? = nil,
     snapshotPublisher: AnyPublisher<WidgetSnapshot?, Never>? = nil,
+    onNavigateToGitHub: (() -> Void)? = nil,
     onConfigChange: ((RepoRadarConfig) -> Void)? = nil,
     onRefreshRequest: (() -> Void)? = nil
   ) {
     self.snapshot = snapshot
+    self.onNavigateToGitHub = onNavigateToGitHub
     self._viewModel = StateObject(
       wrappedValue: RepositoriesSettingsViewModel(
         configStore: configStore,
+        tokenStore: tokenStore,
         snapshot: snapshot,
         snapshotPublisher: snapshotPublisher,
         onConfigChange: onConfigChange,
@@ -240,6 +253,26 @@ public struct RepositoriesSettingsView: View {
   public var body: some View {
     Form {
       Section {
+        HStack(spacing: 8) {
+          Button("Choose repositories…") {
+            isPickerPresented = true
+          }
+          .disabled(!viewModel.hasToken)
+
+          if !viewModel.hasToken {
+            Text("Add a GitHub token first")
+              .font(.system(size: 11))
+              .foregroundStyle(.secondary)
+
+            Button("GitHub tab") {
+              onNavigateToGitHub?()
+            }
+            .buttonStyle(.link)
+            .font(.system(size: 11))
+          }
+        }
+        .padding(.vertical, 2)
+
         if viewModel.watchedRepos.isEmpty {
           Text("No repositories configured yet.")
             .font(.system(size: 13))
@@ -291,6 +324,11 @@ public struct RepositoriesSettingsView: View {
     }
     .onAppear {
       viewModel.updateAccess(from: snapshot)
+    }
+    .sheet(isPresented: $isPickerPresented) {
+      if let pickerVM = viewModel.makePickerViewModel() {
+        RepositoryPickerSheet(viewModel: pickerVM)
+      }
     }
   }
 
@@ -656,11 +694,352 @@ public struct GitHubSettingsView: View {
   }
 }
 
+/// Sheet modal for picking repositories to watch from GitHub token permissions.
+public struct RepositoryPickerSheet: View {
+  @Environment(\.dismiss) private var dismiss
+  @StateObject public var viewModel: RepositoryPickerViewModel
+
+  public init(viewModel: RepositoryPickerViewModel) {
+    self._viewModel = StateObject(wrappedValue: viewModel)
+  }
+
+  public var body: some View {
+    VStack(spacing: 0) {
+      headerSection
+        .padding(.horizontal, 20)
+        .padding(.top, 16)
+        .padding(.bottom, 12)
+
+      Divider()
+
+      controlsBar
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+
+      if viewModel.isAtCap {
+        capBanner
+          .padding(.horizontal, 20)
+          .padding(.bottom, 8)
+      }
+
+      Divider()
+
+      contentArea
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+      Divider()
+
+      footerBar
+        .padding(.horizontal, 20)
+        .padding(.vertical, 12)
+    }
+    .frame(width: 520, height: 480)
+    .task {
+      await viewModel.loadRepositories()
+    }
+  }
+
+  private var headerSection: some View {
+    HStack {
+      VStack(alignment: .leading, spacing: 2) {
+        Text("Choose Repositories")
+          .font(.headline)
+        Text("Select repositories to monitor on your desktop widget.")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+      }
+      Spacer()
+      Text(viewModel.selectionCounterText)
+        .font(.system(size: 12, weight: viewModel.isAtCap ? .semibold : .regular))
+        .foregroundStyle(viewModel.isAtCap ? .orange : .secondary)
+    }
+  }
+
+  private var controlsBar: some View {
+    VStack(spacing: 8) {
+      HStack(spacing: 8) {
+        Image(systemName: "magnifyingglass")
+          .foregroundStyle(.secondary)
+        TextField("Filter repositories…", text: $viewModel.searchQuery)
+          .textFieldStyle(.plain)
+          .font(.system(size: 13))
+        if !viewModel.searchQuery.isEmpty {
+          Button {
+            viewModel.searchQuery = ""
+          } label: {
+            Image(systemName: "xmark.circle.fill")
+              .foregroundStyle(.secondary)
+          }
+          .buttonStyle(.plain)
+        }
+      }
+      .padding(6)
+      .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
+
+      HStack {
+        Button("Select all") {
+          viewModel.selectAll()
+        }
+        .buttonStyle(.plain)
+        .font(.system(size: 11))
+        .foregroundStyle(Color.accentColor)
+        .disabled(viewModel.isLoading || viewModel.allRepositories.isEmpty)
+
+        Text("•")
+          .font(.system(size: 10))
+          .foregroundStyle(.secondary)
+
+        Button("Select none") {
+          viewModel.selectNone()
+        }
+        .buttonStyle(.plain)
+        .font(.system(size: 11))
+        .foregroundStyle(.secondary)
+        .disabled(viewModel.isLoading || viewModel.selectedRepos.isEmpty)
+
+        Spacer()
+
+        Toggle("Show archived", isOn: $viewModel.showArchived)
+          .toggleStyle(.checkbox)
+          .font(.system(size: 11))
+      }
+    }
+  }
+
+  private var capBanner: some View {
+    HStack(spacing: 6) {
+      Image(systemName: "info.circle.fill")
+        .foregroundStyle(.orange)
+      Text(viewModel.capExplanation)
+        .font(.system(size: 11))
+        .foregroundStyle(.secondary)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .padding(8)
+    .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
+  }
+
+  private var contentArea: some View {
+    Group {
+      if viewModel.isLoading {
+        VStack(spacing: 12) {
+          ProgressView()
+          Text("Loading repositories from GitHub…")
+            .font(.system(size: 12))
+            .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+      } else if let error = viewModel.errorMessage {
+        VStack(spacing: 12) {
+          Image(systemName: "exclamationmark.triangle.fill")
+            .font(.title2)
+            .foregroundStyle(.red)
+          Text(error)
+            .font(.system(size: 12))
+            .multilineTextAlignment(.center)
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 32)
+          Button("Try Again") {
+            Task {
+              await viewModel.loadRepositories()
+            }
+          }
+          .font(.system(size: 12))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+      } else if viewModel.isZeroRepos && viewModel.manualRepositories.isEmpty {
+        VStack(spacing: 10) {
+          Image(systemName: "lock.shield")
+            .font(.system(size: 28))
+            .foregroundStyle(.secondary)
+          Text("This token can't read any repositories")
+            .font(.system(size: 13, weight: .medium))
+          Text("Make sure your fine-grained token has repository access permissions.")
+            .font(.system(size: 11))
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 40)
+          Link("Edit token on GitHub ↗", destination: URL(string: "https://github.com/settings/tokens")!)
+            .font(.system(size: 12))
+            .padding(.top, 4)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+      } else if viewModel.visibleRepositories.isEmpty && viewModel.visibleManualRepositories.isEmpty {
+        VStack(spacing: 8) {
+          Text("No matching repositories")
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(.secondary)
+          if !viewModel.searchQuery.isEmpty {
+            Text("No repositories match “\(viewModel.searchQuery)”")
+              .font(.system(size: 11))
+              .foregroundStyle(.secondary)
+          }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+      } else {
+        ScrollView {
+          LazyVStack(alignment: .leading, spacing: 0) {
+            if !viewModel.visibleManualRepositories.isEmpty {
+              Text("ADDED MANUALLY")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 20)
+                .padding(.top, 10)
+                .padding(.bottom, 4)
+
+              ForEach(viewModel.visibleManualRepositories, id: \.self) { repo in
+                manualRepositoryPickerRow(repo)
+                Divider()
+                  .padding(.leading, 36)
+              }
+            }
+
+            if !viewModel.visibleRepositories.isEmpty {
+              if !viewModel.visibleManualRepositories.isEmpty {
+                Text("REPOSITORIES")
+                  .font(.system(size: 11, weight: .semibold))
+                  .foregroundStyle(.secondary)
+                  .padding(.horizontal, 20)
+                  .padding(.top, 14)
+                  .padding(.bottom, 4)
+              }
+
+              ForEach(viewModel.visibleRepositories) { repo in
+                repositoryPickerRow(repo)
+                Divider()
+                  .padding(.leading, 36)
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  private func manualRepositoryPickerRow(_ repo: String) -> some View {
+    let isSelected = viewModel.isSelected(repo)
+    let canToggle = viewModel.canToggle(repo)
+
+    return Button {
+      viewModel.toggleSelection(repo)
+    } label: {
+      HStack(spacing: 10) {
+        Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+          .font(.system(size: 14))
+          .foregroundStyle(isSelected ? Color.accentColor : (canToggle ? Color.secondary : Color.secondary.opacity(0.4)))
+
+        repoNameFormatted(repo)
+
+        Text("Manual")
+          .font(.system(size: 9, weight: .medium))
+          .foregroundStyle(.secondary)
+          .padding(.horizontal, 4)
+          .padding(.vertical, 1)
+          .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 3))
+
+        Spacer()
+      }
+      .padding(.horizontal, 20)
+      .padding(.vertical, 7)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .disabled(!canToggle)
+    .opacity(canToggle ? 1.0 : 0.6)
+  }
+
+  private func repositoryPickerRow(_ repo: ViewerRepositoryNode) -> some View {
+    let isSelected = viewModel.isSelected(repo.nameWithOwner)
+    let canToggle = viewModel.canToggle(repo.nameWithOwner)
+
+    return Button {
+      viewModel.toggleSelection(repo.nameWithOwner)
+    } label: {
+      HStack(spacing: 10) {
+        Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+          .font(.system(size: 14))
+          .foregroundStyle(isSelected ? Color.accentColor : (canToggle ? Color.secondary : Color.secondary.opacity(0.4)))
+
+        repoNameFormatted(repo.nameWithOwner)
+
+        if repo.isPrivate {
+          Image(systemName: "lock.fill")
+            .font(.system(size: 10))
+            .foregroundStyle(.secondary)
+            .help("Private repository")
+        }
+
+        if repo.isArchived {
+          Text("Archived")
+            .font(.system(size: 9, weight: .medium))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1)
+            .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 3))
+        }
+
+        Spacer()
+
+        if let pushed = repo.pushedAt {
+          Text("pushed \(WidgetSnapshot.relativeTimeString(from: pushed))")
+            .font(.system(size: 11))
+            .foregroundStyle(.secondary)
+        }
+      }
+      .padding(.horizontal, 20)
+      .padding(.vertical, 7)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .disabled(!canToggle)
+    .opacity(canToggle ? 1.0 : 0.6)
+  }
+
+  private func repoNameFormatted(_ name: String) -> some View {
+    let parts = name.split(separator: "/", maxSplits: 1)
+    return HStack(spacing: 0) {
+      if parts.count == 2 {
+        Text("\(parts[0])/")
+          .foregroundStyle(.secondary)
+        Text(parts[1])
+          .fontWeight(.bold)
+          .foregroundStyle(.primary)
+      } else {
+        Text(name)
+          .fontWeight(.bold)
+          .foregroundStyle(.primary)
+      }
+    }
+    .font(.system(size: 12))
+    .lineLimit(1)
+    .truncationMode(.tail)
+  }
+
+  private var footerBar: some View {
+    HStack {
+      Button("Cancel") {
+        dismiss()
+      }
+      .keyboardShortcut(.cancelAction)
+
+      Spacer()
+
+      Button("Save") {
+        viewModel.save()
+        dismiss()
+      }
+      .buttonStyle(.borderedProminent)
+      .disabled(viewModel.isLoading)
+      .keyboardShortcut(.defaultAction)
+    }
+  }
+}
+
 // MARK: - Previews
 
 private func makePreviewStore() -> ConfigStore {
   let suite = "reporadar.preview.settings"
-  let defaults = UserDefaults(suiteName: suite) ?? .standard
+  let defaults = UserDefaults(suiteName: suite)!
   let store = ConfigStore(userDefaults: defaults)
   if store.load().watchedRepos.isEmpty {
     store.save(
@@ -831,3 +1210,73 @@ private func makePreviewExpiredVM() -> GitHubSettingsViewModel {
   )
   .preferredColorScheme(.dark)
 }
+
+@MainActor
+private func makePreviewPickerVM(
+  repos: [ViewerRepositoryNode] = [
+    ViewerRepositoryNode(
+      nameWithOwner: "Cwander83/repo-radar",
+      isPrivate: false,
+      isArchived: false,
+      pushedAt: Date().addingTimeInterval(-3600),
+      defaultBranchRef: RefBranch(name: "develop")
+    ),
+    ViewerRepositoryNode(
+      nameWithOwner: "Cwander83/gravity-bar",
+      isPrivate: false,
+      isArchived: false,
+      pushedAt: Date().addingTimeInterval(-86400 * 3),
+      defaultBranchRef: RefBranch(name: "main")
+    ),
+    ViewerRepositoryNode(
+      nameWithOwner: "Cwander83/secret-project",
+      isPrivate: true,
+      isArchived: false,
+      pushedAt: Date().addingTimeInterval(-86400 * 7),
+      defaultBranchRef: RefBranch(name: "main")
+    ),
+    ViewerRepositoryNode(
+      nameWithOwner: "Cwander83/old-experiment",
+      isPrivate: false,
+      isArchived: true,
+      pushedAt: Date().addingTimeInterval(-86400 * 90),
+      defaultBranchRef: RefBranch(name: "master")
+    )
+  ],
+  isLoading: Bool = false,
+  errorMessage: String? = nil,
+  isZeroRepos: Bool = false
+) -> RepositoryPickerViewModel {
+  let store = makePreviewStore()
+  let vm = RepositoryPickerViewModel(
+    configStore: store,
+    tokenStore: makePreviewValidTokenStore(),
+    fetcher: { repos }
+  )
+  vm.allRepositories = repos
+  vm.isLoading = isLoading
+  vm.errorMessage = errorMessage
+  vm.isZeroRepos = isZeroRepos
+  return vm
+}
+
+#Preview("Repository Picker - Loaded - Light") {
+  RepositoryPickerSheet(viewModel: makePreviewPickerVM())
+    .preferredColorScheme(.light)
+}
+
+#Preview("Repository Picker - Loaded - Dark") {
+  RepositoryPickerSheet(viewModel: makePreviewPickerVM())
+    .preferredColorScheme(.dark)
+}
+
+#Preview("Repository Picker - Zero Repos") {
+  RepositoryPickerSheet(viewModel: makePreviewPickerVM(repos: [], isZeroRepos: true))
+    .preferredColorScheme(.dark)
+}
+
+#Preview("Repository Picker - Error") {
+  RepositoryPickerSheet(viewModel: makePreviewPickerVM(repos: [], errorMessage: "GitHub authentication failed: Bad credentials"))
+    .preferredColorScheme(.dark)
+}
+
