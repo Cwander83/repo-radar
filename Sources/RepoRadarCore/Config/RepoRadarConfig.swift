@@ -14,6 +14,11 @@ public enum PollInterval: Int, Codable, Sendable, CaseIterable, Comparable {
     TimeInterval(rawValue * 60)
   }
 
+  /// User-facing display title for the interval (e.g. "5 minutes").
+  public var displayName: String {
+    "\(minutes) minutes"
+  }
+
   public static func < (lhs: PollInterval, rhs: PollInterval) -> Bool {
     lhs.rawValue < rhs.rawValue
   }

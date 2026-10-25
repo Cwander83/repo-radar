@@ -9,6 +9,7 @@ final class AppModel: ObservableObject {
 
   init(scheduler: RefreshScheduler? = RefreshScheduler()) {
     self.scheduler = scheduler
+
     if let scheduler {
       cancellable = scheduler.objectWillChange
         .receive(on: DispatchQueue.main)
@@ -19,8 +20,17 @@ final class AppModel: ObservableObject {
     scheduler?.start()
   }
 
+  var configStore: ConfigStore? {
+    scheduler?.service.configStore
+  }
+
   var menuBarState: MenuBarState {
     scheduler?.menuBarState ?? .error
+  }
+
+  func handleConfigChanged(_ config: RepoRadarConfig) {
+    scheduler?.configurationDidChange()
+    objectWillChange.send()
   }
 }
 
@@ -43,6 +53,17 @@ struct RepoRadarApp: App {
       MenuBarItemView(state: model.menuBarState)
     }
     .menuBarExtraStyle(.window)
+
+    Settings {
+      if let configStore = model.configStore {
+        SettingsView(configStore: configStore) { config in
+          model.handleConfigChanged(config)
+        }
+      } else {
+        AppGroupUnavailableView()
+          .frame(width: 480, height: 200)
+      }
+    }
   }
 }
 
