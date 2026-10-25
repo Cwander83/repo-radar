@@ -1,0 +1,54 @@
+import Foundation
+
+/// Represents the high-level presentation states of the RepoRadar popover.
+public enum PopoverState: String, Codable, Sendable, Equatable, CaseIterable {
+  /// Repositories have active CI failures.
+  case issues
+
+  /// All watched repositories have passing CI checks.
+  case clear
+
+  /// Authentication token was rejected by GitHub (expired, missing, or unauthorized).
+  case token
+
+  /// Network is unreachable; showing cached snapshot data if available.
+  case offline
+
+  /// Non-token error occurred (server 5xx, corrupted file, unsupported version).
+  case error
+
+  /// First run experience before a token or watched repositories are configured.
+  case setup
+
+  /// Computes the active popover state from token availability, watched repositories, and snapshot data.
+  public static func current(
+    hasToken: Bool,
+    watchedRepos: [String],
+    snapshot: WidgetSnapshot?
+  ) -> PopoverState {
+    guard hasToken && !watchedRepos.isEmpty else {
+      return .setup
+    }
+
+    guard let snapshot else {
+      return .clear
+    }
+
+    switch snapshot.status {
+    case .tokenError:
+      return .token
+
+    case .offline:
+      return .offline
+
+    case .serverError, .corrupt, .unsupportedVersion:
+      return .error
+
+    case .missing:
+      return .clear
+
+    case .ok, .rateLimited:
+      return snapshot.failingCI.isEmpty ? .clear : .issues
+    }
+  }
+}

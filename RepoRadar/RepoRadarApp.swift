@@ -35,7 +35,7 @@ struct RepoRadarApp: App {
   var body: some Scene {
     MenuBarExtra {
       if let scheduler = model.scheduler {
-        SchedulerMenu(scheduler: scheduler)
+        PopoverView(scheduler: scheduler)
       } else {
         AppGroupUnavailableView()
       }
@@ -68,35 +68,6 @@ struct MenuBarItemView: View {
       }
     }
     .accessibilityLabel(state.accessibilityLabel)
-  }
-}
-
-private struct SchedulerMenu: View {
-  @ObservedObject var scheduler: RefreshScheduler
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      Text("RepoRadar: \(scheduler.status.displayTitle)")
-        .font(.headline)
-      if let lastUpdated = scheduler.lastUpdated {
-        Text("Updated: \(lastUpdated.formatted(date: .omitted, time: .standard))")
-          .font(.caption)
-          .foregroundStyle(.secondary)
-      }
-      Divider()
-      Button("Refresh now") {
-        Task {
-          try? await scheduler.refreshNow()
-        }
-      }
-      .disabled(scheduler.isRefreshing)
-      Divider()
-      Button("Quit") {
-        NSApplication.shared.terminate(nil)
-      }
-      .keyboardShortcut("q")
-    }
-    .padding(12)
   }
 }
 
