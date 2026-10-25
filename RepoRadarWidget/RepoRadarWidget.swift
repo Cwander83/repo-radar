@@ -91,7 +91,7 @@ public struct Provider: AppIntentTimelineProvider {
 
   public func snapshot(for configuration: RepoRadarWidgetConfigurationIntent, in context: Context) async -> RepoRadarWidgetEntry {
     if context.isPreview {
-      return loader.loadEntry(
+      return RepoRadarWidgetEntry.previewData(
         section: configuration.section,
         repository: configuration.repository?.id
       )

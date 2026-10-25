@@ -410,7 +410,7 @@ struct WidgetStateTests {
     #expect(staleOnly.staleBranches.count == 1)
   }
 
-  @Test("WidgetSnapshot filtering by repository isolates specific repository")
+  @Test("WidgetSnapshot filtering by repository is case-insensitive across all collections")
   func testSnapshotFilteringByRepository() {
     let now = Date()
     let snapshot = WidgetSnapshot(
@@ -430,6 +430,22 @@ struct WidgetStateTests {
           kind: .mainBranch,
           check: "CI",
           conclusion: "FAILURE"
+        )
+      ],
+      runningCI: [
+        RunningCIItem(
+          repo: "Cwander83/repo-radar",
+          ref: "feat",
+          kind: .defaultBranch,
+          check: "Build",
+          status: "IN_PROGRESS"
+        ),
+        RunningCIItem(
+          repo: "Cwander83/gravity-bar",
+          ref: "main",
+          kind: .mainBranch,
+          check: "Build",
+          status: "IN_PROGRESS"
         )
       ],
       pullRequests: [
@@ -452,33 +468,56 @@ struct WidgetStateTests {
           updatedAt: now
         )
       ],
+      staleBranches: [
+        StaleBranchItem(
+          repo: "Cwander83/repo-radar",
+          branch: "old-branch",
+          ageDays: 40,
+          lastCommitDate: now.addingTimeInterval(-86400 * 40),
+          lastCommitOid: "1234567"
+        ),
+        StaleBranchItem(
+          repo: "Cwander83/gravity-bar",
+          branch: "old-gb-branch",
+          ageDays: 40,
+          lastCommitDate: now.addingTimeInterval(-86400 * 40),
+          lastCommitOid: "7654321"
+        )
+      ],
       repositoryAccess: [
         RepositoryAccessItem(name: "Cwander83/repo-radar", defaultBranch: "main"),
         RepositoryAccessItem(name: "Cwander83/gravity-bar", defaultBranch: "main")
       ]
     )
 
-    // Filter by specific repository
-    let repoRadarOnly = snapshot.filtered(repository: "Cwander83/repo-radar")
-    #expect(repoRadarOnly.failingCI.count == 1)
-    #expect(repoRadarOnly.failingCI.first?.repo == "Cwander83/repo-radar")
-    #expect(repoRadarOnly.pullRequests.count == 1)
-    #expect(repoRadarOnly.pullRequests.first?.repo == "Cwander83/repo-radar")
-    #expect(repoRadarOnly.repositoryAccess.count == 1)
+    // Filter by mixed case repository matches canonical snapshot items across all 5 arrays
+    let mixedCaseRepoRadar = snapshot.filtered(repository: "cwander83/REPO-RADAR")
+    #expect(mixedCaseRepoRadar.failingCI.count == 1)
+    #expect(mixedCaseRepoRadar.failingCI.first?.repo == "Cwander83/repo-radar")
+    #expect(mixedCaseRepoRadar.runningCI.count == 1)
+    #expect(mixedCaseRepoRadar.runningCI.first?.repo == "Cwander83/repo-radar")
+    #expect(mixedCaseRepoRadar.pullRequests.count == 1)
+    #expect(mixedCaseRepoRadar.pullRequests.first?.repo == "Cwander83/repo-radar")
+    #expect(mixedCaseRepoRadar.staleBranches.count == 1)
+    #expect(mixedCaseRepoRadar.staleBranches.first?.repo == "Cwander83/repo-radar")
+    #expect(mixedCaseRepoRadar.repositoryAccess.count == 1)
+    #expect(mixedCaseRepoRadar.repositoryAccess.first?.name == "Cwander83/repo-radar")
 
     // "all" repository keyword keeps all repositories
     let allRepos = snapshot.filtered(repository: "all")
     #expect(allRepos.failingCI.count == 2)
+    #expect(allRepos.runningCI.count == 2)
     #expect(allRepos.pullRequests.count == 2)
+    #expect(allRepos.staleBranches.count == 2)
 
     // Section + repository combined filter
-    let combined = snapshot.filtered(section: .failingCI, repository: "Cwander83/gravity-bar")
+    let combined = snapshot.filtered(section: .failingCI, repository: "CWANDER83/gravity-bar")
     #expect(combined.failingCI.count == 1)
     #expect(combined.failingCI.first?.repo == "Cwander83/gravity-bar")
     #expect(combined.pullRequests.isEmpty)
   }
 
-  @Test("WidgetTimelineLoader loadEntry applies section and repository filters")
+  @Test("WidgetTimelineLoader loadEntry applies section and case-insensitive repository filters")
   func testLoaderFilters() throws {
     let tempDir = makeTempDir()
     defer { try? FileManager.default.removeItem(at: tempDir) }
@@ -490,6 +529,9 @@ struct WidgetStateTests {
 
     let snapshotStore = SnapshotStore(fileURL: snapshotFile)
     let configStore = ConfigStore(userDefaults: defaults)
+    try configStore.save(RepoRadarConfig(
+      watchedRepos: ["Cwander83/repo-radar", "Cwander83/gravity-bar"]
+    ))
 
     let now = Date()
     let snapshot = WidgetSnapshot(
@@ -526,10 +568,43 @@ struct WidgetStateTests {
     #expect(prEntry.snapshot?.failingCI.isEmpty == true)
     #expect(prEntry.snapshot?.pullRequests.count == 1)
 
-    // 2. Load with repository: "Cwander83/repo-radar"
-    let repoEntry = loader.loadEntry(repository: "Cwander83/repo-radar")
-    #expect(repoEntry.repositoryFilter == "Cwander83/repo-radar")
+    // 2. Load with repository: "cwander83/REPO-RADAR" (case-insensitive)
+    let repoEntry = loader.loadEntry(repository: "cwander83/REPO-RADAR")
+    #expect(repoEntry.repositoryFilter == "cwander83/REPO-RADAR")
     #expect(repoEntry.snapshot?.failingCI.count == 1)
     #expect(repoEntry.snapshot?.pullRequests.isEmpty == true)
+  }
+
+  @Test("WidgetTimelineLoader loadEntry reports error when filtered repo is no longer watched")
+  func testLoaderRepoNoLongerWatched() throws {
+    let tempDir = makeTempDir()
+    defer { try? FileManager.default.removeItem(at: tempDir) }
+
+    let snapshotFile = tempDir.appendingPathComponent("snapshot.json")
+    let suiteName = "test-widget-unwatched-\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suiteName)!
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+
+    let snapshotStore = SnapshotStore(fileURL: snapshotFile)
+    let configStore = ConfigStore(userDefaults: defaults)
+    try configStore.save(RepoRadarConfig(
+      watchedRepos: ["Cwander83/repo-radar"]
+    ))
+
+    let now = Date()
+    let snapshot = WidgetSnapshot(
+      updatedAt: now,
+      status: .ok,
+      failingCI: [],
+      pullRequests: []
+    )
+    try snapshotStore.write(snapshot)
+
+    let loader = WidgetTimelineLoader(snapshotStore: snapshotStore, configStore: configStore)
+
+    // Filter for a repository that is no longer watched
+    let entry = loader.loadEntry(repository: "Cwander83/removed-repo")
+    #expect(entry.repositoryFilter == "Cwander83/removed-repo")
+    #expect(entry.state == .error(detail: "Cwander83/removed-repo is no longer watched. Edit the widget to pick another."))
   }
 }

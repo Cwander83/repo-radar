@@ -65,6 +65,22 @@ public final class WidgetTimelineLoader: Sendable {
       )
     }
 
+    if let repository, !repository.isEmpty, repository.lowercased() != "all" {
+      let trimmedTarget = repository.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+      let isWatched = watchedRepos.contains {
+        $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == trimmedTarget
+      }
+      if !isWatched {
+        return RepoRadarWidgetEntry(
+          date: now,
+          state: .error(detail: "\(repository) is no longer watched. Edit the widget to pick another."),
+          watchedRepos: watchedRepos,
+          section: section,
+          repositoryFilter: repository
+        )
+      }
+    }
+
     let readResult = snapshotStore.readResult()
     switch readResult {
     case .missing:
@@ -111,6 +127,25 @@ public final class WidgetTimelineLoader: Sendable {
 // MARK: - Preview Fixtures
 
 extension RepoRadarWidgetEntry {
+  /// Sample entry filtered by section and repository for widget gallery previews.
+  public static func previewData(
+    section: WidgetSectionChoice = .all,
+    repository: String? = nil
+  ) -> RepoRadarWidgetEntry {
+    guard case .data(let snapshot) = previewData.state else {
+      return previewData
+    }
+    let filtered = snapshot.filtered(section: section, repository: repository)
+    let state = WidgetState.current(snapshot: filtered, watchedRepos: previewData.watchedRepos)
+    return RepoRadarWidgetEntry(
+      date: previewData.date,
+      state: state,
+      watchedRepos: previewData.watchedRepos,
+      section: section,
+      repositoryFilter: repository
+    )
+  }
+
   /// Sample entry showing active data with failing CI, review requested PRs, and stale branches.
   public static var previewData: RepoRadarWidgetEntry {
     RepoRadarWidgetEntry(

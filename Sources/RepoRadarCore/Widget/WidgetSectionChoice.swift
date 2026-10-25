@@ -46,15 +46,25 @@ extension WidgetSnapshot {
       guard let repository, !repository.isEmpty, repository.lowercased() != "all" else {
         return nil
       }
-      return repository
+      return repository.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }()
 
-    // Filter by repository first
-    let repoFailing = targetRepo == nil ? failingCI : failingCI.filter { $0.repo == targetRepo }
-    let repoRunning = targetRepo == nil ? runningCI : runningCI.filter { $0.repo == targetRepo }
-    let repoPRs = targetRepo == nil ? pullRequests : pullRequests.filter { $0.repo == targetRepo }
-    let repoStale = targetRepo == nil ? staleBranches : staleBranches.filter { $0.repo == targetRepo }
-    let repoAccess = targetRepo == nil ? repositoryAccess : repositoryAccess.filter { $0.name == targetRepo }
+    // Filter by repository first (case-insensitive)
+    let repoFailing = targetRepo == nil ? failingCI : failingCI.filter {
+      $0.repo.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == targetRepo
+    }
+    let repoRunning = targetRepo == nil ? runningCI : runningCI.filter {
+      $0.repo.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == targetRepo
+    }
+    let repoPRs = targetRepo == nil ? pullRequests : pullRequests.filter {
+      $0.repo.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == targetRepo
+    }
+    let repoStale = targetRepo == nil ? staleBranches : staleBranches.filter {
+      $0.repo.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == targetRepo
+    }
+    let repoAccess = targetRepo == nil ? repositoryAccess : repositoryAccess.filter {
+      $0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == targetRepo
+    }
 
     // Filter by section
     let finalFailing: [FailingCIItem]
