@@ -2,17 +2,20 @@ import Foundation
 
 /// Represents the high-level presentation states of the RepoRadar popover.
 public enum PopoverState: String, Codable, Sendable, Equatable, CaseIterable {
-  /// Repositories have active CI failures or running checks.
+  /// Repositories have active CI failures.
   case issues
 
   /// All watched repositories have passing CI checks.
   case clear
 
-  /// Authentication token is missing, expired, or invalid.
+  /// Authentication token was rejected by GitHub (expired, missing, or unauthorized).
   case token
 
   /// Network is unreachable; showing cached snapshot data if available.
   case offline
+
+  /// Non-token error occurred (server 5xx, corrupted file, unsupported version).
+  case error
 
   /// First run experience before a token or watched repositories are configured.
   case setup
@@ -32,11 +35,14 @@ public enum PopoverState: String, Codable, Sendable, Equatable, CaseIterable {
     }
 
     switch snapshot.status {
-    case .tokenError, .corrupt, .unsupportedVersion, .serverError:
+    case .tokenError:
       return .token
 
     case .offline:
       return .offline
+
+    case .serverError, .corrupt, .unsupportedVersion:
+      return .error
 
     case .missing:
       return .clear

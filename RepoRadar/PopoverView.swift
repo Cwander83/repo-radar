@@ -4,8 +4,8 @@ import RepoRadarCore
 import AppKit
 #endif
 
-/// Presents the full RepoRadar popover UI covering the 5 states:
-/// issues, clear, token expired, offline, and first run setup.
+/// Presents the full RepoRadar popover UI covering the states:
+/// issues, clear, token expired, offline, error, and first run setup.
 public struct PopoverView: View {
   @ObservedObject var scheduler: RefreshScheduler
   @State private var showAllStale: Bool = false
@@ -92,6 +92,10 @@ public struct PopoverContentView: View {
     self.onOpenSettings = onOpenSettings
   }
 
+  private var isWaitingForFirstRefresh: Bool {
+    snapshot == nil || snapshot?.status == .missing
+  }
+
   private var failingCI: [FailingCIItem] {
     snapshot?.failingCI ?? []
   }
@@ -113,13 +117,13 @@ public struct PopoverContentView: View {
       // Header
       headerView
 
-      // Banners for token error or offline
+      // Banners for token error, offline, or neutral server/system error
       if state == .token {
         bannerView(
           icon: "key.fill",
           iconColor: .red,
-          title: "GitHub token expired",
-          bodyText: "It expired recently. The data below is from your last refresh.",
+          title: "GitHub token rejected",
+          bodyText: "GitHub rejected the token. The data below is from your last refresh.",
           actionTitle: "Update Token…",
           action: onOpenSettings
         )
@@ -129,6 +133,16 @@ public struct PopoverContentView: View {
           iconColor: .orange,
           title: "You’re offline",
           bodyText: "Showing cached data. Repo Radar retries when you’re back online.",
+          actionTitle: nil,
+          action: nil
+        )
+      } else if state == .error {
+        let detail = snapshot?.status.errorDetail ?? "GitHub server error"
+        bannerView(
+          icon: "exclamationmark.triangle.fill",
+          iconColor: .red,
+          title: "Couldn't refresh",
+          bodyText: "\(detail). The data below is from your last refresh.",
           actionTitle: nil,
           action: nil
         )
@@ -152,7 +166,7 @@ public struct PopoverContentView: View {
           }
           .padding(.vertical, 8)
         }
-        .opacity(state == .token || state == .offline ? 0.5 : 1.0)
+        .opacity(state == .token || state == .offline || state == .error ? 0.5 : 1.0)
       }
 
       Divider()
@@ -210,6 +224,10 @@ public struct PopoverContentView: View {
   }
 
   private var subtitleText: String {
+    if isWaitingForFirstRefresh && state != .setup {
+      return "\(repoCount) repos · Waiting for first refresh"
+    }
+
     switch state {
     case .issues:
       if let lastUpdated {
@@ -217,7 +235,10 @@ public struct PopoverContentView: View {
       }
       return "\(repoCount) repos"
     case .clear:
-      return "\(repoCount) repos · Updated just now"
+      if let lastUpdated {
+        return "\(repoCount) repos · Updated \(relativeTimeString(from: lastUpdated))"
+      }
+      return "\(repoCount) repos · Waiting for first refresh"
     case .token:
       if let lastUpdated {
         return "Not refreshing · last update \(lastUpdated.formatted(date: .abbreviated, time: .shortened))"
@@ -228,6 +249,11 @@ public struct PopoverContentView: View {
         return "Offline · last update \(relativeTimeString(from: lastUpdated))"
       }
       return "Offline"
+    case .error:
+      if let lastUpdated {
+        return "Couldn't refresh · last update \(relativeTimeString(from: lastUpdated))"
+      }
+      return "Couldn't refresh"
     case .setup:
       return "Not set up yet"
     }
@@ -235,7 +261,7 @@ public struct PopoverContentView: View {
 
   private var subtitleColor: Color {
     switch state {
-    case .token:
+    case .token, .error:
       return .red
     case .offline:
       return .orange
@@ -299,7 +325,12 @@ public struct PopoverContentView: View {
     let reviewsCount = pullRequests.filter { $0.reason == .reviewRequested }.count
 
     return HStack(spacing: 6) {
-      if state == .clear {
+      if isWaitingForFirstRefresh {
+        chipTile(count: "-", label: "CI passing", tint: Color.primary.opacity(0.06), textColor: .secondary)
+        chipTile(count: "-", label: "my PRs", tint: Color.primary.opacity(0.06), textColor: .secondary)
+        chipTile(count: "-", label: "reviews", tint: Color.primary.opacity(0.06), textColor: .secondary)
+        chipTile(count: "-", label: "stale", tint: Color.primary.opacity(0.06), textColor: .secondary)
+      } else if state == .clear {
         chipTile(count: "✓", label: "CI passing", tint: Color.green.opacity(0.14), textColor: .green)
         chipTile(count: "\(myPRsCount)", label: "my PRs", tint: Color.indigo.opacity(0.14), textColor: Color(red: 0.39, green: 0.40, blue: 0.95))
         chipTile(count: "\(reviewsCount)", label: "reviews", tint: Color.purple.opacity(0.14), textColor: .purple)
@@ -349,18 +380,33 @@ public struct PopoverContentView: View {
   private var ciSection: some View {
     VStack(alignment: .leading, spacing: 3) {
       sectionHeader(
-        icon: state == .clear ? "checkmark.circle.fill" : "xmark.circle.fill",
-        iconColor: state == .clear ? .green : .red,
-        title: state == .clear ? "CI" : "FAILING CI",
-        count: state == .clear ? 0 : failingCI.count + runningCI.count
+        icon: isWaitingForFirstRefresh ? "arrow.clockwise" : (state == .clear ? "checkmark.circle.fill" : "xmark.circle.fill"),
+        iconColor: isWaitingForFirstRefresh ? .secondary : (state == .clear ? .green : .red),
+        title: state == .clear || isWaitingForFirstRefresh ? "CI" : "FAILING CI",
+        count: isWaitingForFirstRefresh || state == .clear ? 0 : failingCI.count + runningCI.count
       )
 
-      if state == .clear {
+      if isWaitingForFirstRefresh {
+        PopoverRowView(
+          icon: "arrow.clockwise",
+          iconColor: .secondary,
+          title: "Waiting for first refresh…",
+          meta: "Checking \(repoCount) watched repositories",
+          url: nil
+        )
+      } else if state == .clear {
+        let checkedText: String = {
+          if let lastUpdated {
+            return "checked \(relativeTimeString(from: lastUpdated))"
+          }
+          return "checked just now"
+        }()
+
         PopoverRowView(
           icon: "checkmark.circle.fill",
           iconColor: .green,
           title: "All \(repoCount) repos passing",
-          meta: "Default branches and your PRs · checked just now",
+          meta: "Default branches and your PRs · \(checkedText)",
           url: nil
         )
       } else {
@@ -396,7 +442,13 @@ public struct PopoverContentView: View {
         count: pullRequests.count
       )
 
-      if pullRequests.isEmpty {
+      if isWaitingForFirstRefresh {
+        Text("No pull request data yet.")
+          .font(.system(size: 12))
+          .foregroundStyle(.secondary)
+          .padding(.leading, 32)
+          .padding(.vertical, 4)
+      } else if pullRequests.isEmpty {
         Text("No open pull requests.")
           .font(.system(size: 12))
           .foregroundStyle(.secondary)
@@ -433,7 +485,13 @@ public struct PopoverContentView: View {
         count: staleBranches.count
       )
 
-      if staleBranches.isEmpty {
+      if isWaitingForFirstRefresh {
+        Text("No branch data yet.")
+          .font(.system(size: 12))
+          .foregroundStyle(.secondary)
+          .padding(.leading, 32)
+          .padding(.vertical, 4)
+      } else if staleBranches.isEmpty {
         Text("No branches older than \(staleDaysThreshold) days.")
           .font(.system(size: 12))
           .foregroundStyle(.secondary)
@@ -557,6 +615,7 @@ public struct PopoverContentView: View {
         .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
+      .keyboardShortcut(",", modifiers: .command)
 
       Spacer()
 
@@ -575,6 +634,7 @@ public struct PopoverContentView: View {
         .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
+      .keyboardShortcut("q", modifiers: .command)
     }
     .padding(.horizontal, 14)
     .padding(.vertical, 8)
@@ -661,7 +721,7 @@ private struct PopoverRowView: View {
   }
 }
 
-// MARK: - Previews for All 5 States (Light + Dark)
+// MARK: - Previews for All States (Light + Dark)
 
 private enum PopoverPreviewData {
   static let failingSnapshot = WidgetSnapshot(
@@ -769,7 +829,7 @@ private enum PopoverPreviewData {
   )
 
   static let clearSnapshot = WidgetSnapshot(
-    updatedAt: Date(),
+    updatedAt: Date().addingTimeInterval(-120),
     status: .ok,
     failingCI: [],
     runningCI: [],
@@ -803,6 +863,15 @@ private enum PopoverPreviewData {
       )
     ],
     staleBranches: []
+  )
+
+  static let serverErrorSnapshot = WidgetSnapshot(
+    updatedAt: Date().addingTimeInterval(-1800),
+    status: .serverError(detail: "HTTP 502 Bad Gateway"),
+    failingCI: failingSnapshot.failingCI,
+    runningCI: failingSnapshot.runningCI,
+    pullRequests: failingSnapshot.pullRequests,
+    staleBranches: failingSnapshot.staleBranches
   )
 }
 
@@ -840,7 +909,7 @@ private enum PopoverPreviewData {
   PopoverContentView(
     state: .clear,
     repoCount: 5,
-    lastUpdated: Date(),
+    lastUpdated: Date().addingTimeInterval(-120),
     isRefreshing: false,
     snapshot: PopoverPreviewData.clearSnapshot,
     showAllStale: .constant(false),
@@ -855,7 +924,7 @@ private enum PopoverPreviewData {
   PopoverContentView(
     state: .clear,
     repoCount: 5,
-    lastUpdated: Date(),
+    lastUpdated: Date().addingTimeInterval(-120),
     isRefreshing: false,
     snapshot: PopoverPreviewData.clearSnapshot,
     showAllStale: .constant(false),
@@ -866,7 +935,7 @@ private enum PopoverPreviewData {
   .preferredColorScheme(.dark)
 }
 
-#Preview("3. Token Expired - Light") {
+#Preview("3. Token Rejected - Light") {
   PopoverContentView(
     state: .token,
     repoCount: 5,
@@ -881,7 +950,7 @@ private enum PopoverPreviewData {
   .preferredColorScheme(.light)
 }
 
-#Preview("3. Token Expired - Dark") {
+#Preview("3. Token Rejected - Dark") {
   PopoverContentView(
     state: .token,
     repoCount: 5,
@@ -926,7 +995,37 @@ private enum PopoverPreviewData {
   .preferredColorScheme(.dark)
 }
 
-#Preview("5. First Run Setup - Light") {
+#Preview("5. Error (Server) - Light") {
+  PopoverContentView(
+    state: .error,
+    repoCount: 5,
+    lastUpdated: Date().addingTimeInterval(-1800),
+    isRefreshing: false,
+    snapshot: PopoverPreviewData.serverErrorSnapshot,
+    showAllStale: .constant(false),
+    onRefresh: {},
+    onOpenSettings: {}
+  )
+  .frame(width: 340)
+  .preferredColorScheme(.light)
+}
+
+#Preview("5. Error (Server) - Dark") {
+  PopoverContentView(
+    state: .error,
+    repoCount: 5,
+    lastUpdated: Date().addingTimeInterval(-1800),
+    isRefreshing: false,
+    snapshot: PopoverPreviewData.serverErrorSnapshot,
+    showAllStale: .constant(false),
+    onRefresh: {},
+    onOpenSettings: {}
+  )
+  .frame(width: 340)
+  .preferredColorScheme(.dark)
+}
+
+#Preview("6. First Run Setup - Light") {
   PopoverContentView(
     state: .setup,
     repoCount: 0,
@@ -941,7 +1040,7 @@ private enum PopoverPreviewData {
   .preferredColorScheme(.light)
 }
 
-#Preview("5. First Run Setup - Dark") {
+#Preview("6. First Run Setup - Dark") {
   PopoverContentView(
     state: .setup,
     repoCount: 0,

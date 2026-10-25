@@ -37,6 +37,25 @@ public enum SnapshotStatus: Sendable, Equatable {
     }
   }
 
+  public var errorDetail: String? {
+    switch self {
+    case .tokenError(let detail):
+      return detail
+    case .serverError(let detail):
+      return detail
+    case .corrupt(let detail):
+      return detail
+    case .unsupportedVersion(let version):
+      return "Unsupported snapshot version \(version)"
+    case .offline(let detail):
+      return detail
+    case .rateLimited(_, let detail):
+      return detail
+    case .ok, .missing:
+      return nil
+    }
+  }
+
   public init(error: RepoRadarError) {
     switch error {
     case .tokenMissing:
