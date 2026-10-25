@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import Testing
 
 @testable import RepoRadarCore
@@ -41,7 +42,7 @@ struct RepositoriesSettingsViewModelTests {
     let store = ConfigStore(userDefaults: defaults)
     store.save(
       sanitizing: RepoRadarConfig(
-        watchedRepos: ["Cwander83/repo-radar", "Cwander83/private-no-access"]
+        watchedRepos: ["Cwander83/repo-radar", "Cwander83/private-no-access", "Cwander83/pending-repo"]
       )
     )
 
@@ -55,20 +56,91 @@ struct RepositoriesSettingsViewModelTests {
 
     let vm = RepositoriesSettingsViewModel(configStore: store, snapshot: snapshot)
 
-    #expect(vm.totalCount == 2)
-    #expect(vm.reachableCount == 1)
+    #expect(vm.totalCount == 3)
+    #expect(vm.reachableCount == 1) // only confirmed-OK repos count
 
     #expect(vm.hasAccess(for: "Cwander83/repo-radar") == true)
+    #expect(vm.accessStatus(for: "Cwander83/repo-radar") == .ok)
     #expect(vm.statusText(for: "Cwander83/repo-radar") == "OK")
     #expect(vm.defaultBranch(for: "Cwander83/repo-radar") == "develop")
 
     #expect(vm.hasAccess(for: "Cwander83/private-no-access") == false)
+    #expect(vm.accessStatus(for: "Cwander83/private-no-access") == .noAccess)
     #expect(vm.statusText(for: "Cwander83/private-no-access") == "No access")
     #expect(vm.defaultBranch(for: "Cwander83/private-no-access") == nil)
 
-    // Unlisted repo defaults to No access
-    #expect(vm.hasAccess(for: "unknown/repo") == false)
-    #expect(vm.statusText(for: "unknown/repo") == "No access")
+    // Unlisted/pending repo displays Checking… and hasAccess is nil
+    #expect(vm.hasAccess(for: "Cwander83/pending-repo") == nil)
+    #expect(vm.accessStatus(for: "Cwander83/pending-repo") == .checking)
+    #expect(vm.statusText(for: "Cwander83/pending-repo") == "Checking…")
+    #expect(vm.defaultBranch(for: "Cwander83/pending-repo") == nil)
+  }
+
+  @Test("Unverified repos display Checking… state without counting as reachable")
+  @MainActor
+  func unverifiedRepositoriesShowCheckingState() {
+    let (defaults, suite) = makeTestDefaults()
+    defer { defaults.removePersistentDomain(forName: suite) }
+
+    let store = ConfigStore(userDefaults: defaults)
+    store.save(
+      sanitizing: RepoRadarConfig(
+        watchedRepos: ["owner/unverified-1", "owner/unverified-2"]
+      )
+    )
+
+    // Nil snapshot or snapshot with empty repositoryAccess
+    let vm = RepositoriesSettingsViewModel(configStore: store, snapshot: nil)
+
+    #expect(vm.totalCount == 2)
+    #expect(vm.reachableCount == 0)
+
+    #expect(vm.accessStatus(for: "owner/unverified-1") == .checking)
+    #expect(vm.statusText(for: "owner/unverified-1") == "Checking…")
+    #expect(vm.hasAccess(for: "owner/unverified-1") == nil)
+
+    #expect(vm.accessStatus(for: "owner/unverified-2") == .checking)
+    #expect(vm.statusText(for: "owner/unverified-2") == "Checking…")
+    #expect(vm.hasAccess(for: "owner/unverified-2") == nil)
+  }
+
+  @Test("Adding a repo and delivering new snapshot updates access status and reachable count")
+  @MainActor
+  func liveSnapshotUpdatesAccessAfterAdd() {
+    let (defaults, suite) = makeTestDefaults()
+    defer { defaults.removePersistentDomain(forName: suite) }
+
+    let store = ConfigStore(userDefaults: defaults)
+    let snapshotSubject = PassthroughSubject<WidgetSnapshot?, Never>()
+
+    let vm = RepositoriesSettingsViewModel(
+      configStore: store,
+      snapshotPublisher: snapshotSubject.eraseToAnyPublisher()
+    )
+
+    vm.newRepoInput = "Cwander83/new-repo"
+    vm.addRepository()
+
+    #expect(vm.watchedRepos == ["Cwander83/new-repo"])
+    #expect(vm.accessStatus(for: "Cwander83/new-repo") == .checking)
+    #expect(vm.statusText(for: "Cwander83/new-repo") == "Checking…")
+    #expect(vm.hasAccess(for: "Cwander83/new-repo") == nil)
+    #expect(vm.reachableCount == 0)
+
+    // Deliver updated snapshot
+    let updatedSnapshot = WidgetSnapshot(
+      status: .ok,
+      repositoryAccess: [
+        RepositoryAccessItem(name: "Cwander83/new-repo", defaultBranch: "main", hasAccess: true)
+      ]
+    )
+    snapshotSubject.send(updatedSnapshot)
+
+    #expect(vm.accessStatus(for: "Cwander83/new-repo") == .ok)
+    #expect(vm.statusText(for: "Cwander83/new-repo") == "OK")
+    #expect(vm.hasAccess(for: "Cwander83/new-repo") == true)
+    #expect(vm.defaultBranch(for: "Cwander83/new-repo") == "main")
+    #expect(vm.reachableCount == 1)
   }
 
   @Test("Adding valid repository persists and triggers refresh")

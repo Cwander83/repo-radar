@@ -58,7 +58,7 @@ struct RepoRadarApp: App {
       if let configStore = model.configStore {
         SettingsView(
           configStore: configStore,
-          snapshot: model.scheduler?.latestSnapshot,
+          scheduler: model.scheduler,
           onConfigChange: { config in
             model.handleConfigChanged(config)
           },

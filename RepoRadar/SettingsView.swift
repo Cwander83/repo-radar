@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import RepoRadarCore
 
 /// Supported tabs in the RepoRadar Settings window.
@@ -37,21 +38,41 @@ public struct SettingsView: View {
   @State private var selectedTab: SettingsTab
   public let configStore: ConfigStore
   public let snapshot: WidgetSnapshot?
+  public let snapshotPublisher: AnyPublisher<WidgetSnapshot?, Never>?
   public var onConfigChange: ((RepoRadarConfig) -> Void)?
   public var onRefreshRequest: (() -> Void)?
 
   public init(
     configStore: ConfigStore,
     snapshot: WidgetSnapshot? = nil,
+    snapshotPublisher: AnyPublisher<WidgetSnapshot?, Never>? = nil,
     initialTab: SettingsTab = .general,
     onConfigChange: ((RepoRadarConfig) -> Void)? = nil,
     onRefreshRequest: (() -> Void)? = nil
   ) {
     self.configStore = configStore
     self.snapshot = snapshot
+    self.snapshotPublisher = snapshotPublisher
     self._selectedTab = State(initialValue: initialTab)
     self.onConfigChange = onConfigChange
     self.onRefreshRequest = onRefreshRequest
+  }
+
+  public init(
+    configStore: ConfigStore,
+    scheduler: RefreshScheduler?,
+    initialTab: SettingsTab = .general,
+    onConfigChange: ((RepoRadarConfig) -> Void)? = nil,
+    onRefreshRequest: (() -> Void)? = nil
+  ) {
+    self.init(
+      configStore: configStore,
+      snapshot: scheduler?.latestSnapshot,
+      snapshotPublisher: scheduler?.$latestSnapshot.eraseToAnyPublisher(),
+      initialTab: initialTab,
+      onConfigChange: onConfigChange,
+      onRefreshRequest: onRefreshRequest
+    )
   }
 
   public var body: some View {
@@ -65,6 +86,7 @@ public struct SettingsView: View {
       RepositoriesSettingsView(
         configStore: configStore,
         snapshot: snapshot,
+        snapshotPublisher: snapshotPublisher,
         onConfigChange: onConfigChange,
         onRefreshRequest: onRefreshRequest
       )
@@ -139,21 +161,26 @@ public struct GeneralSettingsView: View {
 /// Repositories settings tab displaying watched repositories, reachability, access statuses, and stale threshold.
 public struct RepositoriesSettingsView: View {
   @StateObject private var viewModel: RepositoriesSettingsViewModel
+  private let snapshot: WidgetSnapshot?
 
-  public init(viewModel: RepositoriesSettingsViewModel) {
+  public init(viewModel: RepositoriesSettingsViewModel, snapshot: WidgetSnapshot? = nil) {
     self._viewModel = StateObject(wrappedValue: viewModel)
+    self.snapshot = snapshot
   }
 
   public init(
     configStore: ConfigStore,
     snapshot: WidgetSnapshot? = nil,
+    snapshotPublisher: AnyPublisher<WidgetSnapshot?, Never>? = nil,
     onConfigChange: ((RepoRadarConfig) -> Void)? = nil,
     onRefreshRequest: (() -> Void)? = nil
   ) {
+    self.snapshot = snapshot
     self._viewModel = StateObject(
       wrappedValue: RepositoriesSettingsViewModel(
         configStore: configStore,
         snapshot: snapshot,
+        snapshotPublisher: snapshotPublisher,
         onConfigChange: onConfigChange,
         onRefreshRequest: onRefreshRequest
       )
@@ -209,10 +236,18 @@ public struct RepositoriesSettingsView: View {
     .formStyle(.grouped)
     .frame(width: 480)
     .padding(.bottom, 8)
+    .onChange(of: snapshot) { _, newSnapshot in
+      viewModel.updateAccess(from: newSnapshot)
+    }
+    .onAppear {
+      viewModel.updateAccess(from: snapshot)
+    }
   }
 
   private func repositoryRow(_ repo: String) -> some View {
-    HStack(spacing: 8) {
+    let status = viewModel.accessStatus(for: repo)
+
+    return HStack(spacing: 8) {
       repoNameView(repo)
 
       Spacer()
@@ -228,14 +263,14 @@ public struct RepositoriesSettingsView: View {
 
       HStack(spacing: 4) {
         Circle()
-          .fill(viewModel.hasAccess(for: repo) ? Color.green : Color.red)
+          .fill(statusDotColor(for: status))
           .frame(width: 6, height: 6)
 
-        Text(viewModel.statusText(for: repo))
+        Text(status.displayText)
           .font(.system(size: 11))
-          .foregroundStyle(viewModel.hasAccess(for: repo) ? Color.secondary : Color.red)
+          .foregroundStyle(statusTextColor(for: status))
       }
-      .frame(width: 80, alignment: .leading)
+      .frame(width: 84, alignment: .leading)
 
       Button {
         viewModel.removeRepository(repo)
@@ -248,6 +283,26 @@ public struct RepositoriesSettingsView: View {
       .accessibilityLabel("Remove \(repo)")
     }
     .padding(.vertical, 2)
+  }
+
+  private func statusDotColor(for status: RepoAccessStatus) -> Color {
+    switch status {
+    case .ok:
+      return .green
+    case .noAccess:
+      return .red
+    case .checking:
+      return .gray
+    }
+  }
+
+  private func statusTextColor(for status: RepoAccessStatus) -> Color {
+    switch status {
+    case .ok, .checking:
+      return .secondary
+    case .noAccess:
+      return .red
+    }
   }
 
   private func repoNameView(_ repo: String) -> some View {

@@ -1,6 +1,17 @@
 import Foundation
 import Combine
 
+/// Access status of a watched repository.
+public enum RepoAccessStatus: String, Equatable, Sendable {
+  case ok = "OK"
+  case noAccess = "No access"
+  case checking = "Checking…"
+
+  public var displayText: String {
+    rawValue
+  }
+}
+
 /// View model driving the Repositories tab in Settings.
 /// Manages watched repositories and stale days threshold in ConfigStore.
 @MainActor
@@ -8,6 +19,8 @@ public final class RepositoriesSettingsViewModel: ObservableObject {
   public let configStore: ConfigStore
   public var onConfigChange: ((RepoRadarConfig) -> Void)?
   public var onRefreshRequest: (() -> Void)?
+
+  private var cancellables = Set<AnyCancellable>()
 
   @Published public var watchedRepos: [String] = []
   @Published public var staleDays: Int = 30 {
@@ -24,6 +37,7 @@ public final class RepositoriesSettingsViewModel: ObservableObject {
   public init(
     configStore: ConfigStore,
     snapshot: WidgetSnapshot? = nil,
+    snapshotPublisher: AnyPublisher<WidgetSnapshot?, Never>? = nil,
     onConfigChange: ((RepoRadarConfig) -> Void)? = nil,
     onRefreshRequest: (() -> Void)? = nil
   ) {
@@ -36,6 +50,35 @@ public final class RepositoriesSettingsViewModel: ObservableObject {
     self.staleDays = config.staleDays
 
     updateAccess(from: snapshot)
+
+    if let snapshotPublisher {
+      snapshotPublisher
+        .sink { [weak self] newSnapshot in
+          if Thread.isMainThread {
+            self?.updateAccess(from: newSnapshot)
+          } else {
+            Task { @MainActor [weak self] in
+              self?.updateAccess(from: newSnapshot)
+            }
+          }
+        }
+        .store(in: &cancellables)
+    }
+  }
+
+  public convenience init(
+    configStore: ConfigStore,
+    scheduler: RefreshScheduler?,
+    onConfigChange: ((RepoRadarConfig) -> Void)? = nil,
+    onRefreshRequest: (() -> Void)? = nil
+  ) {
+    self.init(
+      configStore: configStore,
+      snapshot: scheduler?.latestSnapshot,
+      snapshotPublisher: scheduler?.$latestSnapshot.eraseToAnyPublisher(),
+      onConfigChange: onConfigChange,
+      onRefreshRequest: onRefreshRequest
+    )
   }
 
   /// Updates cached repository access statuses from a snapshot.
@@ -48,10 +91,10 @@ public final class RepositoriesSettingsViewModel: ObservableObject {
     self.repositoryAccess = map
   }
 
-  /// Number of reachable watched repositories.
+  /// Number of confirmed reachable watched repositories.
   public var reachableCount: Int {
     watchedRepos.filter { repo in
-      repositoryAccess[repo.lowercased()]?.hasAccess ?? false
+      repositoryAccess[repo.lowercased()]?.hasAccess == true
     }.count
   }
 
@@ -60,12 +103,17 @@ public final class RepositoriesSettingsViewModel: ObservableObject {
     watchedRepos.count
   }
 
-  /// Human-readable access status ("OK" or "No access").
-  public func statusText(for repo: String) -> String {
+  /// Access status for a repository: .ok (accessible), .noAccess (token cannot read), or .checking (unverified / unknown).
+  public func accessStatus(for repo: String) -> RepoAccessStatus {
     guard let info = repositoryAccess[repo.lowercased()] else {
-      return "No access"
+      return .checking
     }
-    return info.hasAccess ? "OK" : "No access"
+    return info.hasAccess ? .ok : .noAccess
+  }
+
+  /// Human-readable access status ("OK", "No access", or "Checking…").
+  public func statusText(for repo: String) -> String {
+    accessStatus(for: repo).displayText
   }
 
   /// Default branch name for a repository if known.
@@ -73,9 +121,10 @@ public final class RepositoriesSettingsViewModel: ObservableObject {
     repositoryAccess[repo.lowercased()]?.defaultBranch
   }
 
-  /// Whether the authenticated token has access to read the repository.
-  public func hasAccess(for repo: String) -> Bool {
-    repositoryAccess[repo.lowercased()]?.hasAccess ?? false
+  /// Whether the authenticated token has confirmed access to read the repository.
+  /// Returns nil if access has not yet been verified.
+  public func hasAccess(for repo: String) -> Bool? {
+    repositoryAccess[repo.lowercased()]?.hasAccess
   }
 
   /// Adds a new repository to the watched list.
