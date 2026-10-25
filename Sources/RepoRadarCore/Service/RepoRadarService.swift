@@ -116,6 +116,7 @@ public struct RepoRadarService: Sendable {
       let queryResponse = try await client.fetch(repos: config.watchedRepos, token: token)
       let report = Classifier.classify(
         response: queryResponse,
+        watchedRepos: config.watchedRepos,
         viewerLogin: queryResponse.data?.viewer.login,
         staleDays: config.staleDays,
         now: now
@@ -173,6 +174,7 @@ public struct RepoRadarService: Sendable {
           runningCI: last.runningCI,
           pullRequests: last.pullRequests,
           staleBranches: last.staleBranches,
+          repositoryAccess: last.repositoryAccess,
           rateLimit: last.rateLimit
         )
       }

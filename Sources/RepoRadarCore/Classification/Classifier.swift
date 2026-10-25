@@ -5,6 +5,7 @@ public enum Classifier {
   /// Classifies a decoded `GraphQLQueryResponse`.
   public static func classify(
     response: GraphQLQueryResponse,
+    watchedRepos: [String] = [],
     viewerLogin: String? = nil,
     staleDays: Int = 30,
     now: Date = Date()
@@ -15,6 +16,7 @@ public enum Classifier {
     let viewer = viewerLogin ?? data.viewer.login
     return classify(
       repos: data.search.nodes,
+      watchedRepos: watchedRepos,
       viewerLogin: viewer,
       staleDays: staleDays,
       now: now
@@ -24,6 +26,7 @@ public enum Classifier {
   /// Classifies a list of repositories for a given viewer.
   public static func classify(
     repos: [RepositoryNode],
+    watchedRepos: [String] = [],
     viewerLogin: String,
     staleDays: Int = 30,
     now: Date = Date()
@@ -68,11 +71,39 @@ public enum Classifier {
       return b1.branch < b2.branch
     }
 
+    // Repository access reachability and default branch mapping
+    var repoAccessItems: [RepositoryAccessItem] = []
+    let nodesByLowercasedName = Dictionary(
+      repos.map { ($0.nameWithOwner.lowercased(), $0) },
+      uniquingKeysWith: { first, _ in first }
+    )
+
+    if !watchedRepos.isEmpty {
+      for watched in watchedRepos {
+        let key = watched.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let node = nodesByLowercasedName[key] {
+          let branch = node.defaultBranchRef?.name ?? node.mainRef?.name ?? "main"
+          repoAccessItems.append(
+            RepositoryAccessItem(name: node.nameWithOwner, defaultBranch: branch, hasAccess: true))
+        } else {
+          repoAccessItems.append(
+            RepositoryAccessItem(name: watched, defaultBranch: nil, hasAccess: false))
+        }
+      }
+    } else {
+      for repo in repos {
+        let branch = repo.defaultBranchRef?.name ?? repo.mainRef?.name ?? "main"
+        repoAccessItems.append(
+          RepositoryAccessItem(name: repo.nameWithOwner, defaultBranch: branch, hasAccess: true))
+      }
+    }
+
     return ClassifiedReport(
       failingCI: allFailingCI,
       runningCI: allRunningCI,
       pullRequests: allPRs,
-      staleBranches: allStaleBranches
+      staleBranches: allStaleBranches,
+      repositoryAccess: repoAccessItems
     )
   }
 

@@ -56,9 +56,18 @@ struct RepoRadarApp: App {
 
     Settings {
       if let configStore = model.configStore {
-        SettingsView(configStore: configStore) { config in
-          model.handleConfigChanged(config)
-        }
+        SettingsView(
+          configStore: configStore,
+          snapshot: model.scheduler?.latestSnapshot,
+          onConfigChange: { config in
+            model.handleConfigChanged(config)
+          },
+          onRefreshRequest: {
+            Task {
+              try? await model.scheduler?.refreshNow()
+            }
+          }
+        )
       } else {
         AppGroupUnavailableView()
           .frame(width: 480, height: 200)

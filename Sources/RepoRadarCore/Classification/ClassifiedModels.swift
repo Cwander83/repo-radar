@@ -133,22 +133,43 @@ public struct StaleBranchItem: Codable, Sendable, Equatable, Identifiable {
   }
 }
 
+/// Status of repository reachability and default branch.
+public struct RepositoryAccessItem: Codable, Sendable, Equatable, Identifiable {
+  public var id: String { name }
+  public let name: String
+  public let defaultBranch: String?
+  public let hasAccess: Bool
+
+  public init(
+    name: String,
+    defaultBranch: String? = nil,
+    hasAccess: Bool = true
+  ) {
+    self.name = name
+    self.defaultBranch = defaultBranch
+    self.hasAccess = hasAccess
+  }
+}
+
 /// Classified report grouping items across all watched repositories.
 public struct ClassifiedReport: Codable, Sendable, Equatable {
   public let failingCI: [FailingCIItem]
   public let runningCI: [RunningCIItem]
   public let pullRequests: [ClassifiedPullRequest]
   public let staleBranches: [StaleBranchItem]
+  public let repositoryAccess: [RepositoryAccessItem]
 
   public init(
     failingCI: [FailingCIItem] = [],
     runningCI: [RunningCIItem] = [],
     pullRequests: [ClassifiedPullRequest] = [],
-    staleBranches: [StaleBranchItem] = []
+    staleBranches: [StaleBranchItem] = [],
+    repositoryAccess: [RepositoryAccessItem] = []
   ) {
     self.failingCI = failingCI
     self.runningCI = runningCI
     self.pullRequests = pullRequests
     self.staleBranches = staleBranches
+    self.repositoryAccess = repositoryAccess
   }
 }

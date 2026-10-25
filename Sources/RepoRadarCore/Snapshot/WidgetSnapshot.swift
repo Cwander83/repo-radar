@@ -185,6 +185,7 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
   public let runningCI: [RunningCIItem]
   public let pullRequests: [ClassifiedPullRequest]
   public let staleBranches: [StaleBranchItem]
+  public let repositoryAccess: [RepositoryAccessItem]
   public let rateLimit: SnapshotRateLimit?
 
   /// Aggregated classified report view.
@@ -193,7 +194,8 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
       failingCI: failingCI,
       runningCI: runningCI,
       pullRequests: pullRequests,
-      staleBranches: staleBranches
+      staleBranches: staleBranches,
+      repositoryAccess: repositoryAccess
     )
   }
 
@@ -205,6 +207,7 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
     runningCI: [RunningCIItem] = [],
     pullRequests: [ClassifiedPullRequest] = [],
     staleBranches: [StaleBranchItem] = [],
+    repositoryAccess: [RepositoryAccessItem] = [],
     rateLimit: SnapshotRateLimit? = nil
   ) {
     self.schemaVersion = schemaVersion
@@ -214,6 +217,7 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
     self.runningCI = runningCI
     self.pullRequests = pullRequests
     self.staleBranches = staleBranches
+    self.repositoryAccess = repositoryAccess
     self.rateLimit = rateLimit
   }
 
@@ -232,8 +236,47 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
       runningCI: report.runningCI,
       pullRequests: report.pullRequests,
       staleBranches: report.staleBranches,
+      repositoryAccess: report.repositoryAccess,
       rateLimit: rateLimit
     )
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case schemaVersion
+    case updatedAt
+    case status
+    case failingCI
+    case runningCI
+    case pullRequests
+    case staleBranches
+    case repositoryAccess
+    case rateLimit
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+    self.updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+    self.status = try container.decode(SnapshotStatus.self, forKey: .status)
+    self.failingCI = try container.decodeIfPresent([FailingCIItem].self, forKey: .failingCI) ?? []
+    self.runningCI = try container.decodeIfPresent([RunningCIItem].self, forKey: .runningCI) ?? []
+    self.pullRequests = try container.decodeIfPresent([ClassifiedPullRequest].self, forKey: .pullRequests) ?? []
+    self.staleBranches = try container.decodeIfPresent([StaleBranchItem].self, forKey: .staleBranches) ?? []
+    self.repositoryAccess = try container.decodeIfPresent([RepositoryAccessItem].self, forKey: .repositoryAccess) ?? []
+    self.rateLimit = try container.decodeIfPresent(SnapshotRateLimit.self, forKey: .rateLimit)
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(schemaVersion, forKey: .schemaVersion)
+    try container.encode(updatedAt, forKey: .updatedAt)
+    try container.encode(status, forKey: .status)
+    try container.encode(failingCI, forKey: .failingCI)
+    try container.encode(runningCI, forKey: .runningCI)
+    try container.encode(pullRequests, forKey: .pullRequests)
+    try container.encode(staleBranches, forKey: .staleBranches)
+    try container.encode(repositoryAccess, forKey: .repositoryAccess)
+    try container.encodeIfPresent(rateLimit, forKey: .rateLimit)
   }
 
   /// Creates a fallback empty snapshot with specified status.
@@ -249,6 +292,7 @@ public struct WidgetSnapshot: Codable, Sendable, Equatable {
       runningCI: [],
       pullRequests: [],
       staleBranches: [],
+      repositoryAccess: [],
       rateLimit: nil
     )
   }
