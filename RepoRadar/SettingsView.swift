@@ -63,7 +63,7 @@ public struct SettingsView: View {
 
   public init(
     configStore: ConfigStore,
-    tokenStore: any TokenStore? = nil,
+    tokenStore: (any TokenStore)? = nil,
     scheduler: RefreshScheduler?,
     initialTab: SettingsTab = .general,
     onConfigChange: ((RepoRadarConfig) -> Void)? = nil,
