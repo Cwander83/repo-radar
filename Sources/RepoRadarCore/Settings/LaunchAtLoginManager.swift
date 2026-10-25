@@ -35,20 +35,11 @@ public protocol LaunchAtLoginManaging: Sendable {
   /// The current login item status.
   var status: LaunchAtLoginStatus { get }
 
-  /// Whether the login item is currently registered and active.
-  var isEnabled: Bool { get }
-
   /// Registers or unregisters the app as a login item.
   func setEnabled(_ enabled: Bool) throws
 
   /// Opens the macOS Login Items system settings pane.
   func openSystemSettingsLoginItems()
-}
-
-public extension LaunchAtLoginManaging {
-  var isEnabled: Bool {
-    status == .enabled
-  }
 }
 
 /// Production implementation of LaunchAtLoginManaging backed by SMAppService.mainApp.

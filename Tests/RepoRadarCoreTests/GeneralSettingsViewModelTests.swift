@@ -90,7 +90,7 @@ struct GeneralSettingsViewModelTests {
     vm.launchAtLogin = true
     #expect(store.load().launchAtLogin == true)
     #expect(latestConfig?.launchAtLogin == true)
-    #expect(loginManager.isEnabled == true)
+    #expect(loginManager.status == .enabled)
     #expect(loginManager.setEnabledCallCount == 1)
     #expect(changeCount == 3)
 
@@ -124,7 +124,6 @@ struct GeneralSettingsViewModelTests {
     #expect(vm.launchAtLogin == true)
     vm.launchAtLogin = false
 
-    #expect(loginManager.isEnabled == false)
     #expect(loginManager.status == .notRegistered)
     #expect(store.load().launchAtLogin == false)
     #expect(vm.launchAtLoginError == nil)

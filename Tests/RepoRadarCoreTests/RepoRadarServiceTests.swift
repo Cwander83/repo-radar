@@ -283,6 +283,74 @@ struct RepoRadarServiceTests {
     MockURLProtocol.unregisterHandler(id: mockID)
   }
 
+  @Test("End-to-end refresh preserves cached data on a GitHub 5xx (ok -> 502) (CHR-101)")
+  func endToEndRefreshPreservesCacheOnServerError() async throws {
+    let suiteName = "test-reporadar-service-\(UUID().uuidString)"
+    let defaults = UserDefaults(suiteName: suiteName)!
+    defer { defaults.removePersistentDomain(forName: suiteName) }
+
+    let configStore = ConfigStore(userDefaults: defaults)
+    try configStore.save(RepoRadarConfig(watchedRepos: ["Cwander83/repo-radar"]))
+
+    let tokenStore = InMemoryTokenStore(initialToken: "valid-token")
+    let tempDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("RepoRadarTest-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: tempDir) }
+    let snapshotStore = SnapshotStore(fileURL: tempDir.appendingPathComponent("snapshot.json"))
+
+    let fixtureData = try loadRecordedPublicFixture()
+    let mockID = UUID().uuidString
+    let service = RepoRadarService(
+      configStore: configStore,
+      tokenStore: tokenStore,
+      client: makeMockClient(id: mockID),
+      snapshotStore: snapshotStore
+    )
+    defer { MockURLProtocol.unregisterHandler(id: mockID) }
+
+    // 1. Initial successful refresh
+    MockURLProtocol.registerHandler(id: mockID) { request in
+      let response = HTTPURLResponse(
+        url: request.url!,
+        statusCode: 200,
+        httpVersion: nil,
+        headerFields: ["Content-Type": "application/json"]
+      )!
+      return (response, fixtureData)
+    }
+
+    let initialTime = try Date("2026-10-24T12:00:00Z", strategy: .iso8601)
+    let initial = try await service.refresh(now: initialTime)
+    #expect(initial.status == .ok)
+    #expect(!initial.staleBranches.isEmpty)
+
+    // 2. GitHub returns 502
+    MockURLProtocol.registerHandler(id: mockID) { request in
+      let response = HTTPURLResponse(
+        url: request.url!,
+        statusCode: 502,
+        httpVersion: nil,
+        headerFields: nil
+      )!
+      return (response, Data())
+    }
+
+    await #expect(throws: RepoRadarError.self) {
+      try await service.refresh(now: initialTime.addingTimeInterval(300))
+    }
+
+    let diskSnapshot = try snapshotStore.read()
+    if case .serverError = diskSnapshot.status {
+      #expect(diskSnapshot.failingCI == initial.failingCI)
+      #expect(diskSnapshot.runningCI == initial.runningCI)
+      #expect(diskSnapshot.pullRequests == initial.pullRequests)
+      #expect(diskSnapshot.staleBranches == initial.staleBranches)
+      #expect(diskSnapshot.updatedAt == initialTime)
+    } else {
+      Issue.record("Expected .serverError status with cached data, got \(diskSnapshot.status)")
+    }
+  }
+
   @Test("End-to-end refresh preserves cached data across consecutive rate limited runs")
   func endToEndRefreshPreservesCacheRateLimited() async throws {
     let suiteName = "test-reporadar-service-\(UUID().uuidString)"

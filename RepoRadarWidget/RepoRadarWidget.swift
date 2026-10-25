@@ -310,10 +310,15 @@ private struct WidgetRowView: View {
   @ViewBuilder
   private var metaText: some View {
     if let timestamp {
+      // One unit ("11 minutes ago"), updated on minute boundaries.
+      let ago = Text(
+        .currentDate,
+        format: .reference(to: timestamp, allowedFields: [.day, .hour, .minute], maxFieldCount: 1)
+      )
       if let metaPrefix, !metaPrefix.isEmpty {
-        Text("\(metaPrefix) · ") + Text(timestamp, style: .relative) + Text(" ago")
+        Text("\(metaPrefix) · \(ago)")
       } else {
-        Text(timestamp, style: .relative) + Text(" ago")
+        ago
       }
     } else {
       Text(meta)

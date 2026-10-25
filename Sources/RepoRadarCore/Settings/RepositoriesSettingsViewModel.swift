@@ -212,25 +212,22 @@ public final class RepositoriesSettingsViewModel: ObservableObject {
     self.staleDays = config.staleDays
   }
 
-  deinit {
-    staleDaysDebounceTask?.cancel()
-  }
-
   private func saveStaleDays() {
     var config = configStore.load()
     config.staleDays = max(1, staleDays)
     configStore.save(sanitizing: config)
     onConfigChange?(config)
 
+    // Capture the callback, not self, so closing Settings mid-debounce still refreshes.
     staleDaysDebounceTask?.cancel()
-    staleDaysDebounceTask = Task { [weak self, clock] in
+    staleDaysDebounceTask = Task { [onRefreshRequest, clock] in
       do {
         try await clock.sleep(seconds: 1.0)
       } catch {
         return
       }
       guard !Task.isCancelled else { return }
-      self?.onRefreshRequest?()
+      onRefreshRequest?()
     }
   }
 }

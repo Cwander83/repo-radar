@@ -146,6 +146,35 @@ struct WidgetStateTests {
     #expect(state.snapshot == snapshot)
   }
 
+  @Test("Server error state shows cached snapshot dimmed like offline")
+  func serverErrorStateShowsCachedSnapshot() {
+    let failing = FailingCIItem(
+      repo: "Cwander83/gravity-bar",
+      ref: "main",
+      kind: .mainBranch,
+      check: "CI",
+      conclusion: "FAILURE",
+      url: URL(string: "https://github.com/Cwander83/gravity-bar")!
+    )
+    let snapshot = WidgetSnapshot(
+      status: .serverError(detail: "HTTP 502 Bad Gateway"),
+      failingCI: [failing]
+    )
+
+    let state = WidgetState.current(snapshot: snapshot, watchedRepos: ["Cwander83/gravity-bar"])
+    #expect(state == .offline(snapshot: snapshot, detail: "HTTP 502 Bad Gateway"))
+    #expect(state.isDimmed == true)
+    #expect(state.statusSubtitle == "HTTP 502 Bad Gateway")
+    #expect(state.failingCount == 1)
+    #expect(state.snapshot == snapshot)
+
+    let noDetail = WidgetSnapshot(status: .serverError(), failingCI: [failing])
+    let noDetailState = WidgetState.current(
+      snapshot: noDetail, watchedRepos: ["Cwander83/gravity-bar"])
+    #expect(noDetailState == .offline(snapshot: noDetail, detail: "GitHub server error"))
+    #expect(noDetailState.statusSubtitle == "GitHub server error")
+  }
+
   @Test("Rate limited state preserves cached snapshot and shows reset time")
   func rateLimitedStateShowsResetTime() {
     let resetDate = Date(timeIntervalSince1970: 1_792_900_000)
@@ -247,7 +276,7 @@ struct WidgetStateTests {
         == "just now")
   }
 
-  @Test("prioritizedWidgetItems orders items: failing CI, running CI, PRs (reviews first), stale")
+  @Test("prioritizedWidgetItems orders items: failing CI, running CI, PRs (Classifier order), stale")
   func testPrioritizedWidgetItems() {
     let now = Date()
     let snapshot = WidgetSnapshot(
@@ -275,17 +304,8 @@ struct WidgetStateTests {
           startedAt: now.addingTimeInterval(-60)
         )
       ],
+      // Classifier order: review requests first, then newest.
       pullRequests: [
-        ClassifiedPullRequest(
-          repo: "Cwander83/repo-radar",
-          number: 10,
-          title: "My Feature",
-          url: URL(string: "https://github.com/Cwander83/repo-radar/pull/10")!,
-          headRefName: "my-feat",
-          reason: .mine,
-          authorLogin: "Cwander83",
-          updatedAt: now.addingTimeInterval(-3600)
-        ),
         ClassifiedPullRequest(
           repo: "Cwander83/gravity-bar",
           number: 22,
@@ -295,6 +315,16 @@ struct WidgetStateTests {
           reason: .reviewRequested,
           authorLogin: "alice",
           updatedAt: now.addingTimeInterval(-1800)
+        ),
+        ClassifiedPullRequest(
+          repo: "Cwander83/repo-radar",
+          number: 10,
+          title: "My Feature",
+          url: URL(string: "https://github.com/Cwander83/repo-radar/pull/10")!,
+          headRefName: "my-feat",
+          reason: .mine,
+          authorLogin: "Cwander83",
+          updatedAt: now.addingTimeInterval(-3600)
         ),
       ],
       staleBranches: [
@@ -316,12 +346,14 @@ struct WidgetStateTests {
     #expect(items[0].iconName == "xmark.circle.fill")
     #expect(items[0].title == "Cwander83/repo-radar · main")
     #expect(items[0].subtitle == "Build · 2m ago")
+    #expect(items[0].subtitlePrefix == "Build")
 
     // 2. Running CI second
     #expect(items[1].kind == .runningCI)
     #expect(items[1].iconName == "circle.dashed")
     #expect(items[1].title == "Cwander83/gravity-bar · develop")
     #expect(items[1].subtitle == "Test · running")
+    #expect(items[1].subtitlePrefix == nil)
 
     // 3. Review requested PR third
     #expect(items[2].kind == .pullRequest(isReviewRequested: true))
@@ -340,6 +372,7 @@ struct WidgetStateTests {
     #expect(items[4].iconName == "arrow.triangle.branch")
     #expect(items[4].title == "old-experiment")
     #expect(items[4].subtitle == "Cwander83/repo-radar · 45d")
+    #expect(items[4].subtitlePrefix == nil)
   }
 
   @Test("WidgetSnapshot filtering by section isolates specific categories")

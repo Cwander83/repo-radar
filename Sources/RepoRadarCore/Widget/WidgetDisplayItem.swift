@@ -76,7 +76,7 @@ extension WidgetSnapshot {
           repo: item.repo,
           title: "\(item.repo) · \(item.ref)",
           subtitle: "\(item.check) · \(timeText)",
-          subtitlePrefix: item.check,
+          subtitlePrefix: item.completedAt == nil ? nil : item.check,
           timestamp: item.completedAt,
           iconName: "xmark.circle.fill",
           url: WidgetGitHubURL.url(for: item)
@@ -93,7 +93,6 @@ extension WidgetSnapshot {
           repo: item.repo,
           title: "\(item.repo) · \(item.ref)",
           subtitle: "\(item.check) · running",
-          subtitlePrefix: "\(item.check) · running",
           timestamp: nil,
           iconName: "circle.dashed",
           url: WidgetGitHubURL.url(for: item)
@@ -101,11 +100,8 @@ extension WidgetSnapshot {
       )
     }
 
-    // 3. Pull requests (review requested first, then authored PRs)
-    let sortedPRs = pullRequests.sorted {
-      ($0.isReviewRequested ? 0 : 1) < ($1.isReviewRequested ? 0 : 1)
-    }
-    for pr in sortedPRs {
+    // 3. Pull requests. Classifier already orders them: review requests first, then newest.
+    for pr in pullRequests {
       let timeText = Self.relativeTimeString(from: pr.updatedAt, relativeTo: now)
       let prefix =
         pr.isReviewRequested
@@ -136,7 +132,6 @@ extension WidgetSnapshot {
           repo: branch.repo,
           title: branch.branch,
           subtitle: subtitle,
-          subtitlePrefix: subtitle,
           timestamp: nil,
           iconName: "arrow.triangle.branch",
           url: WidgetGitHubURL.url(for: branch)
