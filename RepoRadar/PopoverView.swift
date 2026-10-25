@@ -9,6 +9,7 @@ import AppKit
 public struct PopoverView: View {
   @ObservedObject var scheduler: RefreshScheduler
   @State private var showAllStale: Bool = false
+  @Environment(\.openSettings) private var openSettingsAction
 
   public init(scheduler: RefreshScheduler) {
     self.scheduler = scheduler
@@ -54,10 +55,8 @@ public struct PopoverView: View {
   private func openSettings() {
     #if canImport(AppKit)
     NSApp.activate(ignoringOtherApps: true)
-    if !NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) {
-      NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
-    }
     #endif
+    openSettingsAction()
   }
 }
 

@@ -165,22 +165,27 @@ public struct GitHubSettingsPlaceholderView: View {
 
 // MARK: - Previews
 
+private func makePreviewStore() -> ConfigStore {
+  let defaults = UserDefaults(suiteName: "reporadar.preview.settings") ?? .standard
+  return ConfigStore(userDefaults: defaults)
+}
+
 #Preview("General Settings - Light") {
-  GeneralSettingsView(configStore: ConfigStore(userDefaults: .standard))
+  GeneralSettingsView(configStore: makePreviewStore())
     .preferredColorScheme(.light)
 }
 
 #Preview("General Settings - Dark") {
-  GeneralSettingsView(configStore: ConfigStore(userDefaults: .standard))
+  GeneralSettingsView(configStore: makePreviewStore())
     .preferredColorScheme(.dark)
 }
 
 #Preview("Settings Window - Light") {
-  SettingsView(configStore: ConfigStore(userDefaults: .standard))
+  SettingsView(configStore: makePreviewStore())
     .preferredColorScheme(.light)
 }
 
 #Preview("Settings Window - Dark") {
-  SettingsView(configStore: ConfigStore(userDefaults: .standard))
+  SettingsView(configStore: makePreviewStore())
     .preferredColorScheme(.dark)
 }
