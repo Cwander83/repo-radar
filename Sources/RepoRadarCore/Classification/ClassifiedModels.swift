@@ -88,6 +88,10 @@ public struct ClassifiedPullRequest: Codable, Sendable, Equatable, Identifiable 
   public let authorLogin: String?
   public let updatedAt: Date
 
+  public var isReviewRequested: Bool {
+    reason == .reviewRequested
+  }
+
   public init(
     repo: String,
     number: Int,
