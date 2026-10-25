@@ -410,6 +410,94 @@ struct GitHubGraphQLClientTests {
     #expect(rl.cost == 1)
   }
 
+  @Test("validateTokenDetails parses expiration header")
+  func testValidateTokenDetailsWithExpiration() async throws {
+    let (client, endpoint) = makeClient()
+    let json = """
+      {
+        "data": {
+          "viewer": { "login": "octocat" },
+          "rateLimit": {
+            "cost": 1,
+            "limit": 5000,
+            "remaining": 4980,
+            "resetAt": "2026-10-24T18:00:00Z"
+          },
+          "search": { "repositoryCount": 0, "nodes": [] }
+        }
+      }
+      """.data(using: .utf8)!
+
+    MockURLProtocol.requestHandler = { _ in
+      let response = HTTPURLResponse(
+        url: endpoint,
+        statusCode: 200,
+        httpVersion: nil,
+        headerFields: [
+          "github-authentication-token-expiration": "2027-01-22 00:00:00 UTC"
+        ]
+      )!
+      return (response, json)
+    }
+
+    let details = try await client.validateTokenDetails(token: "valid-token")
+    #expect(details.viewer == "octocat")
+    #expect(details.expiresAt != nil)
+  }
+
+  @Test("validateToken reports rateLimited on HTTP 403 with remaining zero")
+  func testValidateToken403RateLimit() async {
+    let (client, endpoint) = makeClient()
+    MockURLProtocol.requestHandler = { _ in
+      let response = HTTPURLResponse(
+        url: endpoint,
+        statusCode: 403,
+        httpVersion: nil,
+        headerFields: [
+          "x-ratelimit-remaining": "0",
+          "x-ratelimit-reset": "1792899000"
+        ]
+      )!
+      let data = "{\"message\": \"API rate limit exceeded\"}".data(using: .utf8)!
+      return (response, data)
+    }
+
+    do {
+      _ = try await client.validateTokenDetails(token: "limited-token")
+      Issue.record("Expected rateLimited error")
+    } catch let error as RepoRadarError {
+      #expect(error == .rateLimited(resetAt: Date(timeIntervalSince1970: 1792899000)))
+    } catch {
+      Issue.record("Unexpected error: \(error)")
+    }
+  }
+
+  @Test("validateToken reports rateLimited on HTTP 429")
+  func testValidateToken429RateLimit() async {
+    let (client, endpoint) = makeClient()
+    MockURLProtocol.requestHandler = { _ in
+      let response = HTTPURLResponse(
+        url: endpoint,
+        statusCode: 429,
+        httpVersion: nil,
+        headerFields: [
+          "x-ratelimit-reset": "1792899000"
+        ]
+      )!
+      let data = "{\"message\": \"Too Many Requests\"}".data(using: .utf8)!
+      return (response, data)
+    }
+
+    do {
+      _ = try await client.validateTokenDetails(token: "limited-token")
+      Issue.record("Expected rateLimited error")
+    } catch let error as RepoRadarError {
+      #expect(error == .rateLimited(resetAt: Date(timeIntervalSince1970: 1792899000)))
+    } catch {
+      Issue.record("Unexpected error: \(error)")
+    }
+  }
+
   @Test("Search string builder formats repo list correctly")
   func testSearchStringBuilder() {
     let formatted = RepoRadarQuery.searchString(for: [

@@ -37,6 +37,7 @@ public enum SettingsTab: String, CaseIterable, Identifiable {
 public struct SettingsView: View {
   @State private var selectedTab: SettingsTab
   public let configStore: ConfigStore
+  public let tokenStore: any TokenStore
   public let snapshot: WidgetSnapshot?
   public let snapshotPublisher: AnyPublisher<WidgetSnapshot?, Never>?
   public var onConfigChange: ((RepoRadarConfig) -> Void)?
@@ -44,6 +45,7 @@ public struct SettingsView: View {
 
   public init(
     configStore: ConfigStore,
+    tokenStore: any TokenStore,
     snapshot: WidgetSnapshot? = nil,
     snapshotPublisher: AnyPublisher<WidgetSnapshot?, Never>? = nil,
     initialTab: SettingsTab = .general,
@@ -51,6 +53,7 @@ public struct SettingsView: View {
     onRefreshRequest: (() -> Void)? = nil
   ) {
     self.configStore = configStore
+    self.tokenStore = tokenStore
     self.snapshot = snapshot
     self.snapshotPublisher = snapshotPublisher
     self._selectedTab = State(initialValue: initialTab)
@@ -60,15 +63,16 @@ public struct SettingsView: View {
 
   public init(
     configStore: ConfigStore,
-    scheduler: RefreshScheduler?,
+    scheduler: RefreshScheduler,
     initialTab: SettingsTab = .general,
     onConfigChange: ((RepoRadarConfig) -> Void)? = nil,
     onRefreshRequest: (() -> Void)? = nil
   ) {
     self.init(
       configStore: configStore,
-      snapshot: scheduler?.latestSnapshot,
-      snapshotPublisher: scheduler?.$latestSnapshot.eraseToAnyPublisher(),
+      tokenStore: scheduler.service.tokenStore,
+      snapshot: scheduler.latestSnapshot,
+      snapshotPublisher: scheduler.$latestSnapshot.eraseToAnyPublisher(),
       initialTab: initialTab,
       onConfigChange: onConfigChange,
       onRefreshRequest: onRefreshRequest
@@ -95,11 +99,17 @@ public struct SettingsView: View {
       }
       .tag(SettingsTab.repositories)
 
-      GitHubSettingsPlaceholderView()
-        .tabItem {
-          Label(SettingsTab.github.title, systemImage: SettingsTab.github.systemImage)
-        }
-        .tag(SettingsTab.github)
+      GitHubSettingsView(
+        tokenStore: tokenStore,
+        configStore: configStore,
+        snapshot: snapshot,
+        snapshotPublisher: snapshotPublisher,
+        onRefreshRequest: onRefreshRequest
+      )
+      .tabItem {
+        Label(SettingsTab.github.title, systemImage: SettingsTab.github.systemImage)
+      }
+      .tag(SettingsTab.github)
     }
     .frame(width: 480)
   }
@@ -349,22 +359,260 @@ public struct RepositoriesSettingsView: View {
   }
 }
 
-/// Placeholder view for GitHub tab (to be implemented in CHR-85).
-public struct GitHubSettingsPlaceholderView: View {
-  public init() {}
+/// GitHub settings tab displaying token presence, status, expiry, budget, required permissions, and replacement flow.
+public struct GitHubSettingsView: View {
+  @StateObject private var viewModel: GitHubSettingsViewModel
+  private let snapshot: WidgetSnapshot?
+
+  public init(viewModel: GitHubSettingsViewModel, snapshot: WidgetSnapshot? = nil) {
+    self._viewModel = StateObject(wrappedValue: viewModel)
+    self.snapshot = snapshot
+  }
+
+  public init(
+    tokenStore: any TokenStore,
+    configStore: ConfigStore,
+    snapshot: WidgetSnapshot? = nil,
+    snapshotPublisher: AnyPublisher<WidgetSnapshot?, Never>? = nil,
+    onRefreshRequest: (() -> Void)? = nil
+  ) {
+    self.snapshot = snapshot
+    self._viewModel = StateObject(
+      wrappedValue: GitHubSettingsViewModel(
+        tokenStore: tokenStore,
+        configStore: configStore,
+        snapshot: snapshot,
+        snapshotPublisher: snapshotPublisher,
+        onRefreshRequest: onRefreshRequest
+      )
+    )
+  }
 
   public var body: some View {
-    VStack(spacing: 12) {
-      Image(systemName: "key")
-        .font(.system(size: 32))
+    Form {
+      if viewModel.status.isExpired {
+        expiredBannerSection
+      }
+
+      if !viewModel.hasToken || viewModel.isReplacingToken {
+        tokenInputSection
+      }
+
+      if viewModel.hasToken {
+        tokenDetailsSection
+      }
+
+      permissionsSection
+    }
+    .formStyle(.grouped)
+    .frame(width: 480)
+    .padding(.bottom, 8)
+    .onChange(of: snapshot) { _, newSnapshot in
+      viewModel.updateFromSnapshot(newSnapshot)
+    }
+  }
+
+  private var expiredBannerSection: some View {
+    Section {
+      HStack(alignment: .center, spacing: 10) {
+        Image(systemName: "exclamationmark.triangle.fill")
+          .font(.system(size: 16))
+          .foregroundStyle(Color.red)
+
+        Text(viewModel.expiredBannerText)
+          .font(.system(size: 12))
+          .foregroundStyle(Color.red)
+          .lineLimit(2)
+
+        Spacer()
+
+        Button("Replace Token…") {
+          viewModel.beginReplacingToken()
+        }
+        .buttonStyle(.borderedProminent)
+        .font(.system(size: 13, weight: .medium))
+      }
+      .padding(.vertical, 4)
+    }
+  }
+
+  private var tokenInputSection: some View {
+    Section {
+      VStack(alignment: .leading, spacing: 8) {
+        HStack(spacing: 8) {
+          SecureField("github_pat_...", text: $viewModel.tokenInput)
+            .textFieldStyle(.roundedBorder)
+            .font(.system(size: 13))
+            .disabled(viewModel.isValidating)
+            .onSubmit {
+              Task {
+                await viewModel.saveToken()
+              }
+            }
+
+          if viewModel.isValidating {
+            ProgressView()
+              .controlSize(.small)
+          }
+
+          Button("Save") {
+            Task {
+              await viewModel.saveToken()
+            }
+          }
+          .disabled(viewModel.tokenInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewModel.isValidating)
+
+          if viewModel.hasToken {
+            Button("Cancel") {
+              viewModel.cancelReplacingToken()
+            }
+            .disabled(viewModel.isValidating)
+          }
+        }
+
+        if let error = viewModel.validationError {
+          Text(error)
+            .font(.system(size: 11))
+            .foregroundStyle(.red)
+        }
+      }
+      .padding(.vertical, 2)
+    } header: {
+      Text(viewModel.hasToken ? "REPLACE TOKEN" : "PERSONAL ACCESS TOKEN")
+    } footer: {
+      if !viewModel.hasToken {
+        Text("Paste a fine-grained personal access token with the required permissions below.")
+          .font(.system(size: 11))
+          .foregroundStyle(.secondary)
+      }
+    }
+  }
+
+  private var tokenDetailsSection: some View {
+    Section {
+      // Header row
+      HStack(spacing: 10) {
+        Image(systemName: "key")
+          .font(.system(size: 16))
+          .foregroundStyle(.secondary)
+          .frame(width: 20)
+
+        VStack(alignment: .leading, spacing: 1) {
+          Text("Fine-grained token")
+            .font(.system(size: 13))
+          Text("\(viewModel.maskedToken ?? "") · stored in Keychain")
+            .font(.system(size: 11))
+            .foregroundStyle(.secondary)
+        }
+
+        Spacer()
+
+        statusPill
+      }
+      .padding(.vertical, 2)
+
+      // Facts rows
+      factRow(label: "Account", value: viewModel.account ?? "—", isRed: false)
+
+      if viewModel.status.isExpired {
+        factRow(label: "Expired", value: viewModel.expirationText, isRed: true)
+        factRow(label: "Repository access", value: viewModel.repositoryAccessText, isRed: false)
+        factRow(label: "Last successful refresh", value: viewModel.lastRefreshText, isRed: false)
+      } else {
+        factRow(label: "Expires", value: viewModel.expirationText, isRed: false)
+        factRow(label: "Repository access", value: viewModel.repositoryAccessText, isRed: false)
+        factRow(label: "API budget this hour", value: viewModel.apiBudgetText, isRed: false)
+      }
+
+      // Actions row
+      HStack {
+        Spacer()
+
+        Button("Remove Token") {
+          viewModel.removeToken()
+        }
+        .font(.system(size: 13))
+        .foregroundStyle(.red)
+        .buttonStyle(.plain)
+
+        Button("Replace Token…") {
+          viewModel.beginReplacingToken()
+        }
+        .font(.system(size: 13))
+        .buttonStyle(.plain)
+        .padding(.leading, 8)
+      }
+      .padding(.vertical, 4)
+    } header: {
+      if !viewModel.isReplacingToken {
+        Text("PERSONAL ACCESS TOKEN")
+      }
+    }
+  }
+
+  private var statusPill: some View {
+    Text(viewModel.status.label)
+      .font(.system(size: 11, weight: .semibold))
+      .padding(.horizontal, 8)
+      .padding(.vertical, 2)
+      .background(statusPillBackground, in: Capsule())
+      .foregroundStyle(statusPillForeground)
+  }
+
+  private var statusPillBackground: Color {
+    switch viewModel.status {
+    case .valid:
+      return Color.green.opacity(0.14)
+    case .expired, .invalid:
+      return Color.red.opacity(0.16)
+    case .missing:
+      return Color.secondary.opacity(0.12)
+    }
+  }
+
+  private var statusPillForeground: Color {
+    switch viewModel.status {
+    case .valid:
+      return Color.green
+    case .expired, .invalid:
+      return Color.red
+    case .missing:
+      return Color.secondary
+    }
+  }
+
+  private func factRow(label: String, value: String, isRed: Bool) -> some View {
+    HStack {
+      Text(label)
+        .font(.system(size: 13))
         .foregroundStyle(.secondary)
-      Text("GitHub Token")
-        .font(.headline)
-      Text("Personal access token and credentials will be configured here.")
-        .font(.subheadline)
+      Spacer()
+      Text(value)
+        .font(.system(size: 13))
+        .foregroundStyle(isRed ? Color.red : Color.primary)
+    }
+    .padding(.vertical, 1)
+  }
+
+  private var permissionsSection: some View {
+    Section {
+      VStack(alignment: .leading, spacing: 6) {
+        Text("Required permissions · all read-only")
+          .font(.system(size: 12, weight: .semibold))
+
+        Text("Metadata · Contents · Pull requests · Commit statuses · Actions")
+          .font(.system(size: 12))
+          .foregroundStyle(.secondary)
+
+        Link("Create a token on GitHub ↗", destination: URL(string: "https://github.com/settings/personal-access-tokens/new")!)
+          .font(.system(size: 12, weight: .medium))
+      }
+      .padding(.vertical, 4)
+    } footer: {
+      Text("The token stays in your login Keychain and is only sent to api.github.com.")
+        .font(.system(size: 11))
         .foregroundStyle(.secondary)
     }
-    .frame(width: 480, height: 260)
   }
 }
 
@@ -433,6 +681,7 @@ private func makePreviewSnapshot() -> WidgetSnapshot {
 #Preview("Settings Window - Repositories - Light") {
   SettingsView(
     configStore: makePreviewStore(),
+    tokenStore: makePreviewValidTokenStore(),
     snapshot: makePreviewSnapshot(),
     initialTab: .repositories
   )
@@ -442,8 +691,87 @@ private func makePreviewSnapshot() -> WidgetSnapshot {
 #Preview("Settings Window - Repositories - Dark") {
   SettingsView(
     configStore: makePreviewStore(),
+    tokenStore: makePreviewValidTokenStore(),
     snapshot: makePreviewSnapshot(),
     initialTab: .repositories
+  )
+  .preferredColorScheme(.dark)
+}
+
+private func makePreviewValidTokenStore() -> InMemoryTokenStore {
+  InMemoryTokenStore(initialToken: "github_pat_11ABCDEFGHIJKLM3fK2")
+}
+
+@MainActor
+private func makePreviewValidVM() -> GitHubSettingsViewModel {
+  let store = makePreviewStore()
+  store.userDefaults.set("Cwander83", forKey: GitHubSettingsViewModel.CacheKeys.cachedAccount)
+  let future = Calendar.current.date(byAdding: .day, value: 90, to: Date())!
+  store.userDefaults.set(future.timeIntervalSince1970, forKey: GitHubSettingsViewModel.CacheKeys.cachedExpiration)
+  let vm = GitHubSettingsViewModel(
+    tokenStore: makePreviewValidTokenStore(),
+    configStore: store,
+    snapshot: WidgetSnapshot(
+      status: .ok,
+      rateLimit: SnapshotRateLimit(remaining: 4912, limit: 5000, resetAt: Date(), cost: 1)
+    )
+  )
+  return vm
+}
+
+@MainActor
+private func makePreviewExpiredVM() -> GitHubSettingsViewModel {
+  let store = makePreviewStore()
+  store.userDefaults.set("Cwander83", forKey: GitHubSettingsViewModel.CacheKeys.cachedAccount)
+  let past = Calendar.current.date(byAdding: .day, value: -4, to: Date())!
+  store.userDefaults.set(past.timeIntervalSince1970, forKey: GitHubSettingsViewModel.CacheKeys.cachedExpiration)
+  let vm = GitHubSettingsViewModel(
+    tokenStore: makePreviewValidTokenStore(),
+    configStore: store,
+    snapshot: WidgetSnapshot(
+      updatedAt: past,
+      status: .tokenError(detail: "Token expired on GitHub")
+    )
+  )
+  return vm
+}
+
+#Preview("GitHub Settings - Valid - Light") {
+  GitHubSettingsView(viewModel: makePreviewValidVM())
+    .preferredColorScheme(.light)
+}
+
+#Preview("GitHub Settings - Valid - Dark") {
+  GitHubSettingsView(viewModel: makePreviewValidVM())
+    .preferredColorScheme(.dark)
+}
+
+#Preview("GitHub Settings - Expired - Light") {
+  GitHubSettingsView(viewModel: makePreviewExpiredVM())
+    .preferredColorScheme(.light)
+}
+
+#Preview("GitHub Settings - Expired - Dark") {
+  GitHubSettingsView(viewModel: makePreviewExpiredVM())
+    .preferredColorScheme(.dark)
+}
+
+#Preview("Settings Window - GitHub - Light") {
+  SettingsView(
+    configStore: makePreviewStore(),
+    tokenStore: makePreviewValidTokenStore(),
+    snapshot: makePreviewSnapshot(),
+    initialTab: .github
+  )
+  .preferredColorScheme(.light)
+}
+
+#Preview("Settings Window - GitHub - Dark") {
+  SettingsView(
+    configStore: makePreviewStore(),
+    tokenStore: makePreviewValidTokenStore(),
+    snapshot: makePreviewSnapshot(),
+    initialTab: .github
   )
   .preferredColorScheme(.dark)
 }

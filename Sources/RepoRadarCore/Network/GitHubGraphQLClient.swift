@@ -1,5 +1,42 @@
 import Foundation
 
+/// Parsed token validation result containing viewer, budget, and optional expiration.
+public struct TokenValidationResult: Equatable, Sendable {
+  public let viewer: String
+  public let rateLimit: RateLimit?
+  public let expiresAt: Date?
+
+  public init(viewer: String, rateLimit: RateLimit?, expiresAt: Date? = nil) {
+    self.viewer = viewer
+    self.rateLimit = rateLimit
+    self.expiresAt = expiresAt
+  }
+}
+
+/// Utility for parsing HTTP response headers returned by GitHub API.
+public enum GitHubHeaderDateParser {
+  public static func parseExpirationDate(_ string: String) -> Date? {
+    let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return nil }
+
+    if let date = try? Date(trimmed, strategy: .iso8601) {
+      return date
+    }
+
+    let df = DateFormatter()
+    df.dateFormat = "yyyy-MM-dd HH:mm:ss zzz"
+    df.locale = Locale(identifier: "en_US_POSIX")
+    df.timeZone = TimeZone(secondsFromGMT: 0)
+    if let date = df.date(from: trimmed) {
+      return date
+    }
+
+    let iso = ISO8601DateFormatter()
+    iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return iso.date(from: trimmed)
+  }
+}
+
 /// URLSession-based client for the GitHub GraphQL API (`https://api.github.com/graphql`).
 public final class GitHubGraphQLClient: Sendable {
   public static let defaultEndpoint = URL(string: "https://api.github.com/graphql")!
@@ -24,22 +61,49 @@ public final class GitHubGraphQLClient: Sendable {
     return try await fetch(search: search, token: token)
   }
 
-  /// Validates a GitHub token and retrieves viewer login and current API budget.
-  public func validateToken(
-    token: String
-  ) async throws -> (viewer: String, rateLimit: RateLimit?) {
-    let response = try await fetch(search: "", token: token)
-    guard let data = response.data else {
-      throw RepoRadarError.decodingError(detail: "Missing viewer in GraphQL response.")
-    }
-    return (data.viewer.login, data.rateLimit)
-  }
-
   /// Executes the RepoRadar query with a custom search string.
   public func fetch(
     search: String,
     token: String
   ) async throws -> GraphQLQueryResponse {
+    let (response, _) = try await execute(search: search, token: token)
+    return response
+  }
+
+  /// Validates a GitHub token and retrieves viewer login and current API budget.
+  public func validateToken(
+    token: String
+  ) async throws -> (viewer: String, rateLimit: RateLimit?) {
+    let result = try await validateTokenDetails(token: token)
+    return (result.viewer, result.rateLimit)
+  }
+
+  /// Validates a GitHub token and retrieves viewer login, API budget, and expiration from response headers.
+  public func validateTokenDetails(
+    token: String
+  ) async throws -> TokenValidationResult {
+    let (response, httpResponse) = try await execute(search: "", token: token)
+    guard let responseData = response.data else {
+      throw RepoRadarError.decodingError(detail: "Missing viewer in GraphQL response.")
+    }
+
+    var expiresAt: Date?
+    if let expHeader = httpResponse.value(forHTTPHeaderField: "github-authentication-token-expiration") {
+      expiresAt = GitHubHeaderDateParser.parseExpirationDate(expHeader)
+    }
+
+    return TokenValidationResult(
+      viewer: responseData.viewer.login,
+      rateLimit: responseData.rateLimit,
+      expiresAt: expiresAt
+    )
+  }
+
+  /// Internal request execution sharing error mapping across fetch and validation paths.
+  private func execute(
+    search: String,
+    token: String
+  ) async throws -> (response: GraphQLQueryResponse, httpResponse: HTTPURLResponse) {
     let trimmedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmedToken.isEmpty else {
       throw RepoRadarError.tokenMissing
@@ -123,9 +187,7 @@ public final class GitHubGraphQLClient: Sendable {
         }
       }
 
-      // A 200 with data is returned even when rateLimit.remaining hits 0: the data is valid,
-      // and the next request surfaces rateLimited.
-      return queryResponse
+      return (queryResponse, httpResponse)
 
     case 401:
       throw RepoRadarError.tokenUnauthorized(detail: bodyMessage ?? "Bad credentials")
