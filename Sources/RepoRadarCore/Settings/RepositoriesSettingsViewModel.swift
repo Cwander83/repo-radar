@@ -19,10 +19,12 @@ public final class RepositoriesSettingsViewModel: ObservableObject {
   public let configStore: ConfigStore
   public let tokenStore: (any TokenStore)?
   public let client: GitHubGraphQLClient
+  public let clock: ClockProtocol
   public var onConfigChange: ((RepoRadarConfig) -> Void)?
   public var onRefreshRequest: (() -> Void)?
 
   private var cancellables = Set<AnyCancellable>()
+  private var staleDaysDebounceTask: Task<Void, Never>?
 
   @Published public var watchedRepos: [String] = []
   @Published public var staleDays: Int = 30 {
@@ -47,12 +49,14 @@ public final class RepositoriesSettingsViewModel: ObservableObject {
     client: GitHubGraphQLClient = GitHubGraphQLClient(),
     snapshot: WidgetSnapshot? = nil,
     snapshotPublisher: AnyPublisher<WidgetSnapshot?, Never>? = nil,
+    clock: ClockProtocol = SystemClock(),
     onConfigChange: ((RepoRadarConfig) -> Void)? = nil,
     onRefreshRequest: (() -> Void)? = nil
   ) {
     self.configStore = configStore
     self.tokenStore = tokenStore
     self.client = client
+    self.clock = clock
     self.onConfigChange = onConfigChange
     self.onRefreshRequest = onRefreshRequest
 
@@ -81,6 +85,7 @@ public final class RepositoriesSettingsViewModel: ObservableObject {
     configStore: ConfigStore,
     tokenStore: (any TokenStore)? = nil,
     scheduler: RefreshScheduler?,
+    clock: ClockProtocol = SystemClock(),
     onConfigChange: ((RepoRadarConfig) -> Void)? = nil,
     onRefreshRequest: (() -> Void)? = nil
   ) {
@@ -90,6 +95,7 @@ public final class RepositoriesSettingsViewModel: ObservableObject {
       client: scheduler?.service.client ?? GitHubGraphQLClient(),
       snapshot: scheduler?.latestSnapshot,
       snapshotPublisher: scheduler?.$latestSnapshot.eraseToAnyPublisher(),
+      clock: clock,
       onConfigChange: onConfigChange,
       onRefreshRequest: onRefreshRequest
     )
@@ -211,6 +217,17 @@ public final class RepositoriesSettingsViewModel: ObservableObject {
     config.staleDays = max(1, staleDays)
     configStore.save(sanitizing: config)
     onConfigChange?(config)
-    onRefreshRequest?()
+
+    // Capture the callback, not self, so closing Settings mid-debounce still refreshes.
+    staleDaysDebounceTask?.cancel()
+    staleDaysDebounceTask = Task { [onRefreshRequest, clock] in
+      do {
+        try await clock.sleep(seconds: 1.0)
+      } catch {
+        return
+      }
+      guard !Task.isCancelled else { return }
+      onRefreshRequest?()
+    }
   }
 }

@@ -16,11 +16,11 @@ public struct PopoverView: View {
   }
 
   private var config: RepoRadarConfig {
-    scheduler.service.configStore.load()
+    scheduler.cachedConfig
   }
 
   private var hasToken: Bool {
-    scheduler.service.tokenStore.hasToken()
+    scheduler.hasToken
   }
 
   private var state: PopoverState {
@@ -114,6 +114,22 @@ public struct PopoverContentView: View {
     snapshot?.staleBranches ?? []
   }
 
+  private var isServerError: Bool {
+    if case .serverError = snapshot?.status { return true }
+    return false
+  }
+
+  /// Snapshot error detail with trailing sentence punctuation trimmed, so appending ". …"
+  /// never gives "..". Closing brackets are kept, e.g. "GitHub server error (HTTP 502)".
+  private func bannerDetail(fallback: String) -> String {
+    var detail = (snapshot?.status.errorDetail ?? fallback)
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    while let last = detail.last, ".!?…".contains(last) || last.isWhitespace {
+      detail.removeLast()
+    }
+    return detail.isEmpty ? fallback : detail
+  }
+
   public var body: some View {
     VStack(spacing: 0) {
       // Header
@@ -129,6 +145,16 @@ public struct PopoverContentView: View {
           actionTitle: "Update Token…",
           action: onOpenSettings
         )
+      } else if state == .offline, isServerError {
+        // GitHub 5xx shows like Offline (dimmed, transient, last data kept), but names the cause.
+        bannerView(
+          icon: "exclamationmark.icloud",
+          iconColor: .orange,
+          title: "GitHub isn’t responding",
+          bodyText: "\(bannerDetail(fallback: "GitHub server error")). Showing cached data. Repo Radar retries on the next refresh.",
+          actionTitle: nil,
+          action: nil
+        )
       } else if state == .offline {
         bannerView(
           icon: "wifi.slash",
@@ -139,12 +165,11 @@ public struct PopoverContentView: View {
           action: nil
         )
       } else if state == .error {
-        let detail = snapshot?.status.errorDetail ?? "GitHub server error"
         bannerView(
           icon: "exclamationmark.triangle.fill",
           iconColor: .red,
           title: "Couldn't refresh",
-          bodyText: "\(detail). The data below is from your last refresh.",
+          bodyText: "\(bannerDetail(fallback: "Couldn't read saved data")). The data below is from your last refresh.",
           actionTitle: nil,
           action: nil
         )
@@ -247,10 +272,11 @@ public struct PopoverContentView: View {
       }
       return "Not refreshing · Authentication required"
     case .offline:
+      let label = isServerError ? "Couldn't reach GitHub" : "Offline"
       if let lastUpdated {
-        return "Offline · last update \(relativeTimeString(from: lastUpdated))"
+        return "\(label) · last update \(relativeTimeString(from: lastUpdated))"
       }
-      return "Offline"
+      return label
     case .error:
       if let lastUpdated {
         return "Couldn't refresh · last update \(relativeTimeString(from: lastUpdated))"
@@ -457,12 +483,8 @@ public struct PopoverContentView: View {
           .padding(.leading, 32)
           .padding(.vertical, 4)
       } else {
-        // Sort: review requests first, then authored PRs
-        let sortedPRs = pullRequests.sorted {
-          ($0.reason == .reviewRequested ? 0 : 1) < ($1.reason == .reviewRequested ? 0 : 1)
-        }
-
-        ForEach(sortedPRs) { pr in
+        // Classifier already orders PRs: review requests first, then newest.
+        ForEach(pullRequests) { pr in
           let isReview = pr.reason == .reviewRequested
           PopoverRowView(
             icon: isReview ? "eye" : "arrow.triangle.pull",
@@ -502,7 +524,7 @@ public struct PopoverContentView: View {
       } else {
         let visibleBranches = showAllStale ? staleBranches : Array(staleBranches.prefix(2))
         ForEach(visibleBranches) { item in
-          let branchURL = URL(string: "https://github.com/\(item.repo)/tree/\(item.branch)")
+          let branchURL = WidgetGitHubURL.url(for: item)
           PopoverRowView(
             icon: "arrow.triangle.branch",
             iconColor: .orange,
@@ -997,9 +1019,9 @@ private enum PopoverPreviewData {
   .preferredColorScheme(.dark)
 }
 
-#Preview("5. Error (Server) - Light") {
+#Preview("5. GitHub Server Error - Light") {
   PopoverContentView(
-    state: .error,
+    state: .offline,
     repoCount: 5,
     lastUpdated: Date().addingTimeInterval(-1800),
     isRefreshing: false,
@@ -1012,9 +1034,9 @@ private enum PopoverPreviewData {
   .preferredColorScheme(.light)
 }
 
-#Preview("5. Error (Server) - Dark") {
+#Preview("5. GitHub Server Error - Dark") {
   PopoverContentView(
-    state: .error,
+    state: .offline,
     repoCount: 5,
     lastUpdated: Date().addingTimeInterval(-1800),
     isRefreshing: false,

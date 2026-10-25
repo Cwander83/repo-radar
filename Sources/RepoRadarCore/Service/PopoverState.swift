@@ -11,10 +11,10 @@ public enum PopoverState: String, Codable, Sendable, Equatable, CaseIterable {
   /// Authentication token was rejected by GitHub (expired, missing, or unauthorized).
   case token
 
-  /// Network is unreachable; showing cached snapshot data if available.
+  /// Network is unreachable or GitHub returned a server error; showing cached snapshot data if available.
   case offline
 
-  /// Non-token error occurred (server 5xx, corrupted file, unsupported version).
+  /// Local snapshot problem (corrupted file, unsupported version).
   case error
 
   /// First run experience before a token or watched repositories are configured.
@@ -38,10 +38,12 @@ public enum PopoverState: String, Codable, Sendable, Equatable, CaseIterable {
     case .tokenError:
       return .token
 
-    case .offline:
+    // A GitHub server error is transient, so it shows like Offline with the last data
+    // kept (CHR-101). The banner reads the snapshot status to say which one happened.
+    case .offline, .serverError:
       return .offline
 
-    case .serverError, .corrupt, .unsupportedVersion:
+    case .corrupt, .unsupportedVersion:
       return .error
 
     case .missing:

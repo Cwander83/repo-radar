@@ -82,7 +82,7 @@ public enum Classifier {
       for watched in watchedRepos {
         let key = watched.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if let node = nodesByLowercasedName[key] {
-          let branch = node.defaultBranchRef?.name ?? node.mainRef?.name ?? "main"
+          let branch = node.defaultBranchRef?.name ?? node.mainRef?.name
           repoAccessItems.append(
             RepositoryAccessItem(name: node.nameWithOwner, defaultBranch: branch, hasAccess: true))
         } else {
@@ -92,7 +92,7 @@ public enum Classifier {
       }
     } else {
       for repo in repos {
-        let branch = repo.defaultBranchRef?.name ?? repo.mainRef?.name ?? "main"
+        let branch = repo.defaultBranchRef?.name ?? repo.mainRef?.name
         repoAccessItems.append(
           RepositoryAccessItem(name: repo.nameWithOwner, defaultBranch: branch, hasAccess: true))
       }

@@ -76,7 +76,7 @@ struct PopoverStateTests {
       ) == .offline
     )
 
-    // Server error status -> error (neutral error banner)
+    // Server error status -> offline (transient failure, cached data preserved, CHR-101)
     let serverErrorSnapshot = WidgetSnapshot(
       updatedAt: Date(),
       status: .serverError(detail: "HTTP 502 Bad Gateway"),
@@ -87,7 +87,7 @@ struct PopoverStateTests {
         hasToken: true,
         watchedRepos: ["owner/repo"],
         snapshot: serverErrorSnapshot
-      ) == .error
+      ) == .offline
     )
 
     // Corrupt snapshot status -> error

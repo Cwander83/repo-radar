@@ -266,7 +266,9 @@ private struct WidgetRowView: View {
   let icon: String
   let iconColor: Color
   let title: String
-  let meta: String
+  var meta: String = ""
+  var metaPrefix: String? = nil
+  var timestamp: Date? = nil
   var url: URL? = nil
 
   var body: some View {
@@ -294,7 +296,7 @@ private struct WidgetRowView: View {
           .foregroundStyle(.primary)
           .lineLimit(1)
 
-        Text(meta)
+        metaText
           .font(.system(size: 9))
           .foregroundStyle(.secondary)
           .lineLimit(1)
@@ -303,6 +305,24 @@ private struct WidgetRowView: View {
       Spacer(minLength: 0)
     }
     .contentShape(Rectangle())
+  }
+
+  @ViewBuilder
+  private var metaText: some View {
+    if let timestamp {
+      // One unit ("11 minutes ago"), updated on minute boundaries.
+      let ago = Text(
+        .currentDate,
+        format: .reference(to: timestamp, allowedFields: [.day, .hour, .minute], maxFieldCount: 1)
+      )
+      if let metaPrefix, !metaPrefix.isEmpty {
+        Text("\(metaPrefix) · \(ago)")
+      } else {
+        ago
+      }
+    } else {
+      Text(meta)
+    }
   }
 }
 
@@ -632,7 +652,9 @@ private struct SmallSectionListView: View {
               icon: item.iconName,
               iconColor: item.color,
               title: item.title,
-              meta: item.subtitle
+              meta: item.subtitle,
+              metaPrefix: item.subtitlePrefix,
+              timestamp: item.timestamp
             )
           }
         }
@@ -953,6 +975,8 @@ private struct MediumDataView: View {
             iconColor: item.color,
             title: item.title,
             meta: item.subtitle,
+            metaPrefix: item.subtitlePrefix,
+            timestamp: item.timestamp,
             url: item.url
           )
         }
@@ -1272,10 +1296,8 @@ private struct LargeDataView: View {
   }
 
   private var prDisplay: [ClassifiedPullRequest] {
-    let sorted = snapshot.pullRequests.sorted {
-      ($0.isReviewRequested ? 0 : 1) < ($1.isReviewRequested ? 0 : 1)
-    }
-    return Array(sorted.prefix(section == .pullRequests ? 6 : 2))
+    // Classifier already orders PRs: review requests first, then newest.
+    Array(snapshot.pullRequests.prefix(section == .pullRequests ? 6 : 2))
   }
 
   private var staleDisplay: [StaleBranchItem] {
@@ -1375,6 +1397,8 @@ private struct LargeDataView: View {
                   iconColor: .red,
                   title: "\(item.repo) · \(item.ref)",
                   meta: "\(item.check) · \(timeText)",
+                  metaPrefix: item.check,
+                  timestamp: item.completedAt,
                   url: WidgetGitHubURL.url(for: item)
                 )
               }
@@ -1405,14 +1429,16 @@ private struct LargeDataView: View {
 
               ForEach(prDisplay) { pr in
                 let timeText = WidgetSnapshot.relativeTimeString(from: pr.updatedAt)
-                let meta = pr.isReviewRequested
-                  ? "\(pr.repo) #\(pr.number) · review requested · \(timeText)"
-                  : "\(pr.repo) #\(pr.number) · \(timeText)"
+                let prefix = pr.isReviewRequested
+                  ? "\(pr.repo) #\(pr.number) · review requested"
+                  : "\(pr.repo) #\(pr.number)"
                 WidgetRowView(
                   icon: pr.isReviewRequested ? "eye" : "arrow.triangle.pull",
                   iconColor: pr.isReviewRequested ? .purple : Color(red: 0.39, green: 0.40, blue: 0.95),
                   title: pr.title,
-                  meta: meta,
+                  meta: "\(prefix) · \(timeText)",
+                  metaPrefix: prefix,
+                  timestamp: pr.updatedAt,
                   url: WidgetGitHubURL.url(for: pr)
                 )
               }

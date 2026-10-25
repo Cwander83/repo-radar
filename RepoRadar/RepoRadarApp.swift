@@ -44,7 +44,7 @@ struct RepoRadarApp: App {
       runKeychainVerification()
     }
     #endif
-    NSApplication.shared.setActivationPolicy(.accessory)
+    // No Dock icon: Info.plist sets LSUIElement, so no activation policy call is needed.
   }
 
   var body: some Scene {
@@ -68,6 +68,7 @@ struct RepoRadarApp: App {
             model.handleConfigChanged(config)
           },
           onRefreshRequest: {
+            model.scheduler?.refreshCachedState()
             Task {
               try? await model.scheduler?.refreshNow()
             }
