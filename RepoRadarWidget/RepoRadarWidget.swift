@@ -253,8 +253,20 @@ private struct WidgetRowView: View {
   let iconColor: Color
   let title: String
   let meta: String
+  var url: URL? = nil
 
   var body: some View {
+    if let url {
+      Link(destination: url) {
+        rowContent
+      }
+      .buttonStyle(.plain)
+    } else {
+      rowContent
+    }
+  }
+
+  private var rowContent: some View {
     HStack(spacing: 7) {
       Image(systemName: icon)
         .font(.system(size: 11, weight: .bold))
@@ -275,6 +287,7 @@ private struct WidgetRowView: View {
 
       Spacer(minLength: 0)
     }
+    .contentShape(Rectangle())
   }
 }
 
@@ -313,112 +326,123 @@ private struct WidgetSectionHeader: View {
 private struct SmallWidgetView: View {
   let entry: RepoRadarWidgetEntry
 
+  private var destinationURL: URL? {
+    WidgetGitHubURL.smallWidgetURL(
+      snapshot: entry.snapshot,
+      section: entry.section,
+      repositoryFilter: entry.repositoryFilter
+    )
+  }
+
   var body: some View {
-    switch entry.state {
-    case .firstRun:
-      SmallEmptyCardView(
-        icon: "radar",
-        iconColor: Color.indigo,
-        title: "Repo Radar",
-        message: "Open the menu bar app to configure GitHub access."
-      )
-
-    case .noRepos:
-      SmallEmptyCardView(
-        icon: "book.closed",
-        iconColor: Color.indigo,
-        title: "No Repositories",
-        message: "Add repositories to watch in Settings."
-      )
-
-    case .tokenError(let detail):
-      SmallEmptyCardView(
-        icon: "key.fill",
-        iconColor: .red,
-        title: "Auth Error",
-        message: detail,
-        actionHint: "Update in Settings…"
-      )
-
-    case .error(let detail):
-      SmallEmptyCardView(
-        icon: "exclamationmark.triangle.fill",
-        iconColor: .orange,
-        title: "Error",
-        message: detail
-      )
-
-    case .allClear(let snapshot):
-      if entry.section == .all {
-        SmallAllClearView(snapshot: snapshot, repoFilter: entry.repositoryFilter)
-      } else {
-        SmallSectionListView(
-          snapshot: snapshot,
-          section: entry.section,
-          repoFilter: entry.repositoryFilter,
-          isDimmed: false,
-          footerText: nil
-        )
-      }
-
-    case .data(let snapshot):
-      if entry.section == .all {
-        SmallDataView(snapshot: snapshot, repoFilter: entry.repositoryFilter, isDimmed: false, footerText: nil)
-      } else {
-        SmallSectionListView(
-          snapshot: snapshot,
-          section: entry.section,
-          repoFilter: entry.repositoryFilter,
-          isDimmed: false,
-          footerText: nil
-        )
-      }
-
-    case .offline(let snapshot, let detail):
-      if let snapshot {
-        if entry.section == .all {
-          SmallDataView(snapshot: snapshot, repoFilter: entry.repositoryFilter, isDimmed: true, footerText: detail ?? "Offline · Cached")
-        } else {
-          SmallSectionListView(
-            snapshot: snapshot,
-            section: entry.section,
-            repoFilter: entry.repositoryFilter,
-            isDimmed: true,
-            footerText: detail ?? "Offline · Cached"
-          )
-        }
-      } else {
+    Group {
+      switch entry.state {
+      case .firstRun:
         SmallEmptyCardView(
-          icon: "wifi.slash",
-          iconColor: .secondary,
-          title: "Offline",
-          message: detail ?? "Network unreachable. Waiting for connection."
+          icon: "radar",
+          iconColor: Color.indigo,
+          title: "Repo Radar",
+          message: "Open the menu bar app to configure GitHub access."
         )
-      }
 
-    case .rateLimited(let snapshot, let resetAt, let detail):
-      if let snapshot {
-        let footer = rateLimitNotice(resetAt: resetAt, detail: detail)
-        if entry.section == .all {
-          SmallDataView(snapshot: snapshot, repoFilter: entry.repositoryFilter, isDimmed: true, footerText: footer)
-        } else {
-          SmallSectionListView(
-            snapshot: snapshot,
-            section: entry.section,
-            repoFilter: entry.repositoryFilter,
-            isDimmed: true,
-            footerText: footer
-          )
-        }
-      } else {
+      case .noRepos:
         SmallEmptyCardView(
-          icon: "hourglass",
+          icon: "book.closed",
+          iconColor: Color.indigo,
+          title: "No Repositories",
+          message: "Add repositories to watch in Settings."
+        )
+
+      case .tokenError(let detail):
+        SmallEmptyCardView(
+          icon: "key.fill",
+          iconColor: .red,
+          title: "Auth Error",
+          message: detail,
+          actionHint: "Update in Settings…"
+        )
+
+      case .error(let detail):
+        SmallEmptyCardView(
+          icon: "exclamationmark.triangle.fill",
           iconColor: .orange,
-          title: "Rate Limited",
-          message: rateLimitNotice(resetAt: resetAt, detail: detail)
+          title: "Error",
+          message: detail
         )
+
+      case .allClear(let snapshot):
+        if entry.section == .all {
+          SmallAllClearView(snapshot: snapshot, repoFilter: entry.repositoryFilter)
+        } else {
+          SmallSectionListView(
+            snapshot: snapshot,
+            section: entry.section,
+            repoFilter: entry.repositoryFilter,
+            isDimmed: false,
+            footerText: nil
+          )
+        }
+
+      case .data(let snapshot):
+        if entry.section == .all {
+          SmallDataView(snapshot: snapshot, repoFilter: entry.repositoryFilter, isDimmed: false, footerText: nil)
+        } else {
+          SmallSectionListView(
+            snapshot: snapshot,
+            section: entry.section,
+            repoFilter: entry.repositoryFilter,
+            isDimmed: false,
+            footerText: nil
+          )
+        }
+
+      case .offline(let snapshot, let detail):
+        if let snapshot {
+          if entry.section == .all {
+            SmallDataView(snapshot: snapshot, repoFilter: entry.repositoryFilter, isDimmed: true, footerText: detail ?? "Offline · Cached")
+          } else {
+            SmallSectionListView(
+              snapshot: snapshot,
+              section: entry.section,
+              repoFilter: entry.repositoryFilter,
+              isDimmed: true,
+              footerText: detail ?? "Offline · Cached"
+            )
+          }
+        } else {
+          SmallEmptyCardView(
+            icon: "wifi.slash",
+            iconColor: .secondary,
+            title: "Offline",
+            message: detail ?? "Network unreachable. Waiting for connection."
+          )
+        }
+
+      case .rateLimited(let snapshot, let resetAt, let detail):
+        if let snapshot {
+          let footer = rateLimitNotice(resetAt: resetAt, detail: detail)
+          if entry.section == .all {
+            SmallDataView(snapshot: snapshot, repoFilter: entry.repositoryFilter, isDimmed: true, footerText: footer)
+          } else {
+            SmallSectionListView(
+              snapshot: snapshot,
+              section: entry.section,
+              repoFilter: entry.repositoryFilter,
+              isDimmed: true,
+              footerText: footer
+            )
+          }
+        } else {
+          SmallEmptyCardView(
+            icon: "hourglass",
+            iconColor: .orange,
+            title: "Rate Limited",
+            message: rateLimitNotice(resetAt: resetAt, detail: detail)
+          )
+        }
       }
     }
+    .widgetURL(destinationURL)
   }
 }
 
@@ -893,7 +917,8 @@ private struct MediumDataView: View {
             icon: item.iconName,
             iconColor: item.color,
             title: item.title,
-            meta: item.subtitle
+            meta: item.subtitle,
+            url: item.url
           )
         }
       }
@@ -938,6 +963,14 @@ private struct MediumAllClearView: View {
   let section: WidgetSectionChoice
   let repoFilter: String?
 
+  private var destinationURL: URL? {
+    WidgetGitHubURL.smallWidgetURL(
+      snapshot: snapshot,
+      section: section,
+      repositoryFilter: repoFilter
+    )
+  }
+
   private var headerTitle: String {
     if let short = shortRepoName(repoFilter) {
       if section == .all {
@@ -970,23 +1003,37 @@ private struct MediumAllClearView: View {
 
       Spacer(minLength: 0)
 
-      HStack(spacing: 12) {
-        Image(systemName: "checkmark.seal.fill")
-          .font(.system(size: 30))
-          .foregroundStyle(.green)
-
-        VStack(alignment: .leading, spacing: 2) {
-          Text(clearTitle)
-            .font(.system(size: 14, weight: .semibold))
-
-          Text(clearSubtitle)
-            .font(.system(size: 11.5))
-            .foregroundStyle(.secondary)
+      if let destinationURL {
+        Link(destination: destinationURL) {
+          clearCardContent
         }
+        .buttonStyle(.plain)
+      } else {
+        clearCardContent
       }
 
       Spacer(minLength: 0)
     }
+  }
+
+  private var clearCardContent: some View {
+    HStack(spacing: 12) {
+      Image(systemName: "checkmark.seal.fill")
+        .font(.system(size: 30))
+        .foregroundStyle(.green)
+
+      VStack(alignment: .leading, spacing: 2) {
+        Text(clearTitle)
+          .font(.system(size: 14, weight: .semibold))
+
+        Text(clearSubtitle)
+          .font(.system(size: 11.5))
+          .foregroundStyle(.secondary)
+      }
+
+      Spacer(minLength: 0)
+    }
+    .contentShape(Rectangle())
   }
 
   private var clearTitle: String {
@@ -1280,7 +1327,8 @@ private struct LargeDataView: View {
                   icon: "xmark.circle.fill",
                   iconColor: .red,
                   title: "\(item.repo) · \(item.ref)",
-                  meta: "\(item.check) · \(timeText)"
+                  meta: "\(item.check) · \(timeText)",
+                  url: WidgetGitHubURL.url(for: item)
                 )
               }
 
@@ -1289,7 +1337,8 @@ private struct LargeDataView: View {
                   icon: "circle.dashed",
                   iconColor: .secondary,
                   title: "\(item.repo) · \(item.ref)",
-                  meta: "\(item.check) · running"
+                  meta: "\(item.check) · running",
+                  url: WidgetGitHubURL.url(for: item)
                 )
               }
             }
@@ -1316,7 +1365,8 @@ private struct LargeDataView: View {
                   icon: pr.isReviewRequested ? "eye" : "arrow.triangle.pull",
                   iconColor: pr.isReviewRequested ? .purple : Color(red: 0.39, green: 0.40, blue: 0.95),
                   title: pr.title,
-                  meta: meta
+                  meta: meta,
+                  url: WidgetGitHubURL.url(for: pr)
                 )
               }
             }
@@ -1339,7 +1389,8 @@ private struct LargeDataView: View {
                   icon: "arrow.triangle.branch",
                   iconColor: .orange,
                   title: item.branch,
-                  meta: "\(item.repo) · \(item.ageDays)d"
+                  meta: "\(item.repo) · \(item.ageDays)d",
+                  url: WidgetGitHubURL.url(for: item)
                 )
               }
             }
@@ -1357,6 +1408,14 @@ private struct LargeAllClearView: View {
   let snapshot: WidgetSnapshot
   let section: WidgetSectionChoice
   let repoFilter: String?
+
+  private var destinationURL: URL? {
+    WidgetGitHubURL.smallWidgetURL(
+      snapshot: snapshot,
+      section: section,
+      repositoryFilter: repoFilter
+    )
+  }
 
   private var headerTitle: String {
     if let short = shortRepoName(repoFilter) {
@@ -1425,23 +1484,35 @@ private struct LargeAllClearView: View {
 
       Spacer(minLength: 0)
 
-      VStack(spacing: 8) {
-        Image(systemName: "checkmark.seal.fill")
-          .font(.system(size: 38))
-          .foregroundStyle(.green)
-
-        Text(clearTitle)
-          .font(.system(size: 16, weight: .semibold))
-
-        Text(clearSubtitle)
-          .font(.system(size: 12))
-          .foregroundStyle(.secondary)
-          .multilineTextAlignment(.center)
+      if let destinationURL {
+        Link(destination: destinationURL) {
+          clearCardContent
+        }
+        .buttonStyle(.plain)
+      } else {
+        clearCardContent
       }
-      .frame(maxWidth: .infinity)
 
       Spacer(minLength: 0)
     }
+  }
+
+  private var clearCardContent: some View {
+    VStack(spacing: 8) {
+      Image(systemName: "checkmark.seal.fill")
+        .font(.system(size: 38))
+        .foregroundStyle(.green)
+
+      Text(clearTitle)
+        .font(.system(size: 16, weight: .semibold))
+
+      Text(clearSubtitle)
+        .font(.system(size: 12))
+        .foregroundStyle(.secondary)
+        .multilineTextAlignment(.center)
+    }
+    .frame(maxWidth: .infinity)
+    .contentShape(Rectangle())
   }
 
   private var clearTitle: String {

@@ -607,4 +607,190 @@ struct WidgetStateTests {
     #expect(entry.repositoryFilter == "Cwander83/removed-repo")
     #expect(entry.state == .error(detail: "Cwander83/removed-repo is no longer watched. Edit the widget to pick another."))
   }
+
+  @Test("WidgetGitHubURL resolves URLs for failing and running CI items with fallback")
+  func testGitHubURLForCI() {
+    let explicitURL = URL(string: "https://github.com/Cwander83/repo-radar/actions/runs/12345")!
+    let failingWithURL = FailingCIItem(
+      repo: "Cwander83/repo-radar",
+      ref: "main",
+      kind: .mainBranch,
+      check: "Build",
+      conclusion: "FAILURE",
+      url: explicitURL
+    )
+    #expect(WidgetGitHubURL.url(for: failingWithURL) == explicitURL)
+
+    let failingWithoutURL = FailingCIItem(
+      repo: "Cwander83/repo-radar",
+      ref: "main",
+      kind: .mainBranch,
+      check: "Build",
+      conclusion: "FAILURE",
+      url: nil
+    )
+    #expect(WidgetGitHubURL.url(for: failingWithoutURL) == URL(string: "https://github.com/Cwander83/repo-radar/actions")!)
+
+    let runningWithURL = RunningCIItem(
+      repo: "Cwander83/gravity-bar",
+      ref: "develop",
+      kind: .defaultBranch,
+      check: "Test",
+      status: "IN_PROGRESS",
+      url: explicitURL
+    )
+    #expect(WidgetGitHubURL.url(for: runningWithURL) == explicitURL)
+
+    let runningWithoutURL = RunningCIItem(
+      repo: "Cwander83/gravity-bar",
+      ref: "develop",
+      kind: .defaultBranch,
+      check: "Test",
+      status: "IN_PROGRESS",
+      url: nil
+    )
+    #expect(WidgetGitHubURL.url(for: runningWithoutURL) == URL(string: "https://github.com/Cwander83/gravity-bar/actions")!)
+  }
+
+  @Test("WidgetGitHubURL resolves URLs for PRs and stale branches")
+  func testGitHubURLForPRsAndBranches() {
+    let prURL = URL(string: "https://github.com/Cwander83/repo-radar/pull/42")!
+    let pr = ClassifiedPullRequest(
+      repo: "Cwander83/repo-radar",
+      number: 42,
+      title: "Add links",
+      url: prURL,
+      headRefName: "feat/links",
+      reason: .mine,
+      updatedAt: Date()
+    )
+    #expect(WidgetGitHubURL.url(for: pr) == prURL)
+
+    let stale = StaleBranchItem(
+      repo: "Cwander83/repo-radar",
+      branch: "feature/experimental-ui",
+      ageDays: 35,
+      lastCommitDate: Date(),
+      lastCommitOid: "abc1234"
+    )
+    #expect(WidgetGitHubURL.url(for: stale) == URL(string: "https://github.com/Cwander83/repo-radar/tree/feature/experimental-ui")!)
+  }
+
+  @Test("prioritizedWidgetItems populates valid URLs for every display row")
+  func testPrioritizedWidgetItemsURLs() {
+    let now = Date()
+    let snapshot = WidgetSnapshot(
+      updatedAt: now,
+      status: .ok,
+      failingCI: [
+        FailingCIItem(
+          repo: "Cwander83/repo-radar",
+          ref: "main",
+          kind: .mainBranch,
+          check: "CI",
+          conclusion: "FAILURE"
+        )
+      ],
+      runningCI: [
+        RunningCIItem(
+          repo: "Cwander83/repo-radar",
+          ref: "feat",
+          kind: .defaultBranch,
+          check: "Build",
+          status: "IN_PROGRESS"
+        )
+      ],
+      pullRequests: [
+        ClassifiedPullRequest(
+          repo: "Cwander83/repo-radar",
+          number: 1,
+          title: "PR 1",
+          url: URL(string: "https://github.com/Cwander83/repo-radar/pull/1")!,
+          headRefName: "pr1",
+          reason: .mine,
+          updatedAt: now
+        )
+      ],
+      staleBranches: [
+        StaleBranchItem(
+          repo: "Cwander83/repo-radar",
+          branch: "old-branch",
+          ageDays: 40,
+          lastCommitDate: now,
+          lastCommitOid: "1234567"
+        )
+      ]
+    )
+
+    let items = snapshot.prioritizedWidgetItems(now: now)
+    #expect(items.count == 4)
+    for item in items {
+      #expect(item.url != nil)
+      #expect(item.url?.absoluteString.hasPrefix("https://github.com/") == true)
+    }
+  }
+
+  @Test("smallWidgetURL routes correctly based on items, repository filter, and section")
+  func testSmallWidgetURLRouting() {
+    let now = Date()
+    let prURL = URL(string: "https://github.com/Cwander83/repo-radar/pull/99")!
+
+    // 1. With active items, links to top item's URL
+    let snapshotWithItem = WidgetSnapshot(
+      updatedAt: now,
+      status: .ok,
+      failingCI: [],
+      pullRequests: [
+        ClassifiedPullRequest(
+          repo: "Cwander83/repo-radar",
+          number: 99,
+          title: "Top PR",
+          url: prURL,
+          headRefName: "pr99",
+          reason: .mine,
+          updatedAt: now
+        )
+      ]
+    )
+    let topURL = WidgetGitHubURL.smallWidgetURL(snapshot: snapshotWithItem, section: .pullRequests)
+    #expect(topURL == prURL)
+
+    // 2. Empty snapshot with repo filter
+    let emptySnapshot = WidgetSnapshot(
+      updatedAt: now,
+      status: .ok,
+      failingCI: [],
+      pullRequests: []
+    )
+    #expect(
+      WidgetGitHubURL.smallWidgetURL(snapshot: emptySnapshot, section: .all, repositoryFilter: "Cwander83/repo-radar")
+        == URL(string: "https://github.com/Cwander83/repo-radar")!
+    )
+    #expect(
+      WidgetGitHubURL.smallWidgetURL(snapshot: emptySnapshot, section: .failingCI, repositoryFilter: "Cwander83/repo-radar")
+        == URL(string: "https://github.com/Cwander83/repo-radar/actions")!
+    )
+    #expect(
+      WidgetGitHubURL.smallWidgetURL(snapshot: emptySnapshot, section: .pullRequests, repositoryFilter: "Cwander83/repo-radar")
+        == URL(string: "https://github.com/Cwander83/repo-radar/pulls")!
+    )
+    #expect(
+      WidgetGitHubURL.smallWidgetURL(snapshot: emptySnapshot, section: .staleBranches, repositoryFilter: "Cwander83/repo-radar")
+        == URL(string: "https://github.com/Cwander83/repo-radar/branches")!
+    )
+
+    // 3. Empty snapshot without repo filter
+    #expect(
+      WidgetGitHubURL.smallWidgetURL(snapshot: emptySnapshot, section: .all)
+        == URL(string: "https://github.com")!
+    )
+    #expect(
+      WidgetGitHubURL.smallWidgetURL(snapshot: emptySnapshot, section: .failingCI)
+        == URL(string: "https://github.com/notifications")!
+    )
+    #expect(
+      WidgetGitHubURL.smallWidgetURL(snapshot: emptySnapshot, section: .pullRequests)
+        == URL(string: "https://github.com/pulls")!
+    )
+  }
 }

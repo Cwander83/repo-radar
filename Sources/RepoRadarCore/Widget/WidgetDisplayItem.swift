@@ -71,7 +71,7 @@ extension WidgetSnapshot {
           title: "\(item.repo) · \(item.ref)",
           subtitle: "\(item.check) · \(timeText)",
           iconName: "xmark.circle.fill",
-          url: item.url
+          url: WidgetGitHubURL.url(for: item)
         )
       )
     }
@@ -86,7 +86,7 @@ extension WidgetSnapshot {
           title: "\(item.repo) · \(item.ref)",
           subtitle: "\(item.check) · running",
           iconName: "circle.dashed",
-          url: item.url
+          url: WidgetGitHubURL.url(for: item)
         )
       )
     }
@@ -109,14 +109,13 @@ extension WidgetSnapshot {
           title: pr.title,
           subtitle: subtitle,
           iconName: pr.isReviewRequested ? "eye" : "arrow.triangle.pull",
-          url: pr.url
+          url: WidgetGitHubURL.url(for: pr)
         )
       )
     }
 
     // 4. Stale branches
     for branch in staleBranches {
-      let branchURL = URL(string: "https://github.com/\(branch.repo)/tree/\(branch.branch)")
       items.append(
         WidgetDisplayItem(
           id: "stale-\(branch.id)",
@@ -125,7 +124,7 @@ extension WidgetSnapshot {
           title: branch.branch,
           subtitle: "\(branch.repo) · \(branch.ageDays)d",
           iconName: "arrow.triangle.branch",
-          url: branchURL
+          url: WidgetGitHubURL.url(for: branch)
         )
       )
     }
