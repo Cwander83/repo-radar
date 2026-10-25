@@ -45,3 +45,22 @@ repo-radar: a macOS desktop widget showing open PRs, failing CI, and stale branc
 - Linear issue branches use the `chriswandermail/chr-NN-short-name` format.
 - Conventional Commits (`feat:`, `fix:`, `docs:`, `build:`, `ci:`, `test:`).
 - CI must pass (Gitleaks secret scan, plus build/test once sources exist).
+
+## Agent workflow (builder + reviewer)
+
+One agent builds Linear issues; a separate reviewer agent reviews, tests, and merges. Linear is the channel between them: put every instruction, result, and question in a comment on the issue, not only in chat.
+
+**Builder, per issue:**
+
+1. `git checkout develop && git pull`, then create the branch Linear shows for the issue (`chriswandermail/chr-NN-…`).
+2. Build to the issue's **Done when**. Read the latest reviewer comment on the issue first, since it may carry over work from an earlier review.
+3. Before pushing, run all of these and fix anything they flag:
+   - `swift build && swift test`
+   - `xcodebuild -project RepoRadar.xcodeproj -scheme RepoRadar -configuration Debug CODE_SIGNING_ALLOWED=NO build`
+   - `git diff develop... | grep -nE '\?\? *\.standard|UserDefaults\.standard'`. Any hit outside tests or previews breaks the no-silent-fallbacks rule.
+4. Push and open a PR into `develop` titled `type(scope): summary (CHR-NN)`. Linear's git automation moves the issue to **In Review** when the PR opens.
+5. Comment on the issue with what changed, the test count, and any **manual test** the Done-when needs, such as a reboot, a widget on the desktop, or a Figma comparison.
+6. If the reviewer sends it back (the issue moves to **In Progress** with a "changes required" comment), push fixes to the same branch, comment on what changed, and move the issue to **In Review** yourself. A push doesn't re-trigger the automation.
+7. Never merge your own PR, and never touch `main`.
+
+**Reviewer:** review in a separate worktree, so the builder's checkout is never touched. Squash-merge into `develop`; Linear's automation marks the issue **Done** on merge. File non-blocking follow-ups on an owning issue (or a new one) and blocking ones as a "changes required" comment.
