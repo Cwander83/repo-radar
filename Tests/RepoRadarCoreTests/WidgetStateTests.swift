@@ -23,7 +23,8 @@ struct WidgetStateTests {
 
   @Test("Corrupt snapshot maps to error")
   func corruptSnapshotMapsToError() {
-    let state = WidgetState.current(readResult: .corrupt(detail: "Bad JSON syntax"), watchedRepos: ["owner/repo"])
+    let state = WidgetState.current(
+      readResult: .corrupt(detail: "Bad JSON syntax"), watchedRepos: ["owner/repo"])
     #expect(state == .error(detail: "Bad JSON syntax"))
     #expect(state.statusTitle == "Error")
     #expect(state.statusSubtitle == "Bad JSON syntax")
@@ -147,7 +148,7 @@ struct WidgetStateTests {
 
   @Test("Rate limited state preserves cached snapshot and shows reset time")
   func rateLimitedStateShowsResetTime() {
-    let resetDate = Date(timeIntervalSince1970: 1792900000)
+    let resetDate = Date(timeIntervalSince1970: 1_792_900_000)
     let snapshot = WidgetSnapshot(
       status: .rateLimited(resetAt: resetDate, detail: "Rate limit exceeded"),
       staleBranches: [
@@ -162,7 +163,8 @@ struct WidgetStateTests {
     )
 
     let state = WidgetState.current(snapshot: snapshot, watchedRepos: ["Cwander83/repo-radar"])
-    #expect(state == .rateLimited(snapshot: snapshot, resetAt: resetDate, detail: "Rate limit exceeded"))
+    #expect(
+      state == .rateLimited(snapshot: snapshot, resetAt: resetDate, detail: "Rate limit exceeded"))
     #expect(state.isDimmed == true)
     #expect(state.statusTitle == "Rate Limited")
     #expect(state.statusSubtitle?.contains("Resets at") == true)
@@ -223,5 +225,120 @@ struct WidgetStateTests {
     let loader = WidgetTimelineLoader(snapshotStore: nil, configStore: nil)
     let entry = loader.loadEntry()
     #expect(entry.state == .error(detail: "App Group container unavailable"))
+  }
+
+  @Test("relativeTimeString formats relative differences accurately")
+  func testRelativeTimeString() {
+    let now = Date()
+    #expect(
+      WidgetSnapshot.relativeTimeString(from: now.addingTimeInterval(-20), relativeTo: now)
+        == "just now")
+    #expect(
+      WidgetSnapshot.relativeTimeString(from: now.addingTimeInterval(-300), relativeTo: now)
+        == "5m ago")
+    #expect(
+      WidgetSnapshot.relativeTimeString(from: now.addingTimeInterval(-7200), relativeTo: now)
+        == "2h ago")
+    #expect(
+      WidgetSnapshot.relativeTimeString(from: now.addingTimeInterval(-86400 * 4), relativeTo: now)
+        == "4d ago")
+    #expect(
+      WidgetSnapshot.relativeTimeString(from: now.addingTimeInterval(50), relativeTo: now)
+        == "just now")
+  }
+
+  @Test("prioritizedWidgetItems orders items: failing CI, running CI, PRs (reviews first), stale")
+  func testPrioritizedWidgetItems() {
+    let now = Date()
+    let snapshot = WidgetSnapshot(
+      updatedAt: now,
+      status: .ok,
+      failingCI: [
+        FailingCIItem(
+          repo: "Cwander83/repo-radar",
+          ref: "main",
+          kind: .mainBranch,
+          check: "Build",
+          conclusion: "FAILURE",
+          url: URL(string: "https://github.com/Cwander83/repo-radar/actions/runs/1"),
+          completedAt: now.addingTimeInterval(-120)
+        )
+      ],
+      runningCI: [
+        RunningCIItem(
+          repo: "Cwander83/gravity-bar",
+          ref: "develop",
+          kind: .defaultBranch,
+          check: "Test",
+          status: "IN_PROGRESS",
+          url: URL(string: "https://github.com/Cwander83/gravity-bar/actions/runs/2"),
+          startedAt: now.addingTimeInterval(-60)
+        )
+      ],
+      pullRequests: [
+        ClassifiedPullRequest(
+          repo: "Cwander83/repo-radar",
+          number: 10,
+          title: "My Feature",
+          url: URL(string: "https://github.com/Cwander83/repo-radar/pull/10")!,
+          headRefName: "my-feat",
+          reason: .mine,
+          authorLogin: "Cwander83",
+          updatedAt: now.addingTimeInterval(-3600)
+        ),
+        ClassifiedPullRequest(
+          repo: "Cwander83/gravity-bar",
+          number: 22,
+          title: "Review This Fix",
+          url: URL(string: "https://github.com/Cwander83/gravity-bar/pull/22")!,
+          headRefName: "fix-bug",
+          reason: .reviewRequested,
+          authorLogin: "alice",
+          updatedAt: now.addingTimeInterval(-1800)
+        ),
+      ],
+      staleBranches: [
+        StaleBranchItem(
+          repo: "Cwander83/repo-radar",
+          branch: "old-experiment",
+          ageDays: 45,
+          lastCommitDate: now.addingTimeInterval(-86400 * 45),
+          lastCommitOid: "1234567"
+        )
+      ]
+    )
+
+    let items = snapshot.prioritizedWidgetItems(now: now)
+    #expect(items.count == 5)
+
+    // 1. Failing CI first
+    #expect(items[0].kind == .failingCI)
+    #expect(items[0].iconName == "xmark.circle.fill")
+    #expect(items[0].title == "Cwander83/repo-radar · main")
+    #expect(items[0].subtitle == "Build · 2m ago")
+
+    // 2. Running CI second
+    #expect(items[1].kind == .runningCI)
+    #expect(items[1].iconName == "circle.dashed")
+    #expect(items[1].title == "Cwander83/gravity-bar · develop")
+    #expect(items[1].subtitle == "Test · running")
+
+    // 3. Review requested PR third
+    #expect(items[2].kind == .pullRequest(isReviewRequested: true))
+    #expect(items[2].iconName == "eye")
+    #expect(items[2].title == "Review This Fix")
+    #expect(items[2].subtitle.contains("review requested"))
+
+    // 4. Authored PR fourth
+    #expect(items[3].kind == .pullRequest(isReviewRequested: false))
+    #expect(items[3].iconName == "arrow.triangle.pull")
+    #expect(items[3].title == "My Feature")
+    #expect(!items[3].subtitle.contains("review requested"))
+
+    // 5. Stale branch fifth
+    #expect(items[4].kind == .staleBranch)
+    #expect(items[4].iconName == "arrow.triangle.branch")
+    #expect(items[4].title == "old-experiment")
+    #expect(items[4].subtitle == "Cwander83/repo-radar · 45d")
   }
 }
