@@ -1,10 +1,84 @@
+import AppIntents
 import RepoRadarCore
 import SwiftUI
 import WidgetKit
 
-/// Timeline provider that reads the snapshot from the shared App Group container.
+// MARK: - App Intents Configuration
+
+public struct RepositoryEntity: AppEntity, Identifiable, Sendable {
+  public var id: String
+  public var name: String
+
+  public static let defaultQuery = RepositoryEntityQuery()
+
+  public static let typeDisplayRepresentation: TypeDisplayRepresentation = "Repository"
+
+  public var displayRepresentation: DisplayRepresentation {
+    DisplayRepresentation(title: "\(name)")
+  }
+
+  public init(id: String, name: String) {
+    self.id = id
+    self.name = name
+  }
+}
+
+public struct RepositoryEntityQuery: EntityQuery, Sendable {
+  public init() {}
+
+  public func entities(for identifiers: [String]) async throws -> [RepositoryEntity] {
+    let all = try await suggestedEntities()
+    return all.filter { identifiers.contains($0.id) }
+  }
+
+  public func suggestedEntities() async throws -> [RepositoryEntity] {
+    var repos: [RepositoryEntity] = [
+      RepositoryEntity(id: "all", name: "All Repositories")
+    ]
+    if let configStore = ConfigStore() {
+      let config = configStore.load()
+      for repo in config.watchedRepos {
+        repos.append(RepositoryEntity(id: repo, name: repo))
+      }
+    }
+    return repos
+  }
+
+  public func defaultResult() async -> RepositoryEntity? {
+    RepositoryEntity(id: "all", name: "All Repositories")
+  }
+}
+
+public struct RepoRadarWidgetConfigurationIntent: WidgetConfigurationIntent {
+  public static let title: LocalizedStringResource = "Configure Repo Radar"
+  public static let description: IntentDescription = "Filter by section and repository."
+
+  @Parameter(title: "Section", default: .all)
+  public var section: WidgetSectionChoice
+
+  @Parameter(title: "Repository")
+  public var repository: RepositoryEntity?
+
+  public init() {
+    self.section = .all
+    self.repository = nil
+  }
+
+  public init(section: WidgetSectionChoice = .all, repository: RepositoryEntity? = nil) {
+    self.section = section
+    self.repository = repository
+  }
+}
+
+// MARK: - Timeline Provider
+
+/// Timeline provider conforming to AppIntentTimelineProvider.
+/// Reads App Group snapshot and filters by intent section & repository parameters.
 /// Performs zero network calls inside the widget extension.
-public struct Provider: TimelineProvider {
+public struct Provider: AppIntentTimelineProvider {
+  public typealias Entry = RepoRadarWidgetEntry
+  public typealias Intent = RepoRadarWidgetConfigurationIntent
+
   private let loader: WidgetTimelineLoader
 
   public init(loader: WidgetTimelineLoader = WidgetTimelineLoader()) {
@@ -15,26 +89,32 @@ public struct Provider: TimelineProvider {
     RepoRadarWidgetEntry.previewAllClear
   }
 
-  public func getSnapshot(in context: Context, completion: @escaping (RepoRadarWidgetEntry) -> Void)
-  {
+  public func snapshot(for configuration: RepoRadarWidgetConfigurationIntent, in context: Context) async -> RepoRadarWidgetEntry {
     if context.isPreview {
-      completion(RepoRadarWidgetEntry.previewData)
-    } else {
-      completion(loader.loadEntry())
+      return loader.loadEntry(
+        section: configuration.section,
+        repository: configuration.repository?.id
+      )
     }
+    return loader.loadEntry(
+      section: configuration.section,
+      repository: configuration.repository?.id
+    )
   }
 
-  public func getTimeline(
-    in context: Context, completion: @escaping (Timeline<RepoRadarWidgetEntry>) -> Void
-  ) {
-    let entry = loader.loadEntry()
+  public func timeline(for configuration: RepoRadarWidgetConfigurationIntent, in context: Context) async -> Timeline<RepoRadarWidgetEntry> {
+    let entry = loader.loadEntry(
+      section: configuration.section,
+      repository: configuration.repository?.id
+    )
     let nextRefresh =
       Calendar.current.date(byAdding: .minute, value: 15, to: Date())
       ?? Date().addingTimeInterval(900)
-    let timeline = Timeline(entries: [entry], policy: .after(nextRefresh))
-    completion(timeline)
+    return Timeline(entries: [entry], policy: .after(nextRefresh))
   }
 }
+
+// MARK: - Root Entry View
 
 /// Root widget entry view routing to appropriate family presentation (small, medium, large).
 public struct RepoRadarWidgetEntryView: View {
@@ -77,6 +157,27 @@ extension WidgetDisplayItem {
       return .orange
     }
   }
+}
+
+private func sectionColor(_ section: WidgetSectionChoice) -> Color {
+  switch section {
+  case .all:
+    return Color.indigo
+  case .failingCI:
+    return .red
+  case .pullRequests:
+    return Color(red: 0.39, green: 0.40, blue: 0.95)
+  case .staleBranches:
+    return .orange
+  }
+}
+
+private func shortRepoName(_ repo: String?) -> String? {
+  guard let repo, !repo.isEmpty, repo.lowercased() != "all" else { return nil }
+  if let slash = repo.lastIndex(of: "/") {
+    return String(repo[repo.index(after: slash)...])
+  }
+  return repo
 }
 
 private func timeString(from date: Date) -> String {
@@ -248,14 +349,44 @@ private struct SmallWidgetView: View {
       )
 
     case .allClear(let snapshot):
-      SmallAllClearView(snapshot: snapshot)
+      if entry.section == .all {
+        SmallAllClearView(snapshot: snapshot, repoFilter: entry.repositoryFilter)
+      } else {
+        SmallSectionListView(
+          snapshot: snapshot,
+          section: entry.section,
+          repoFilter: entry.repositoryFilter,
+          isDimmed: false,
+          footerText: nil
+        )
+      }
 
     case .data(let snapshot):
-      SmallDataView(snapshot: snapshot, isDimmed: false, footerText: nil)
+      if entry.section == .all {
+        SmallDataView(snapshot: snapshot, repoFilter: entry.repositoryFilter, isDimmed: false, footerText: nil)
+      } else {
+        SmallSectionListView(
+          snapshot: snapshot,
+          section: entry.section,
+          repoFilter: entry.repositoryFilter,
+          isDimmed: false,
+          footerText: nil
+        )
+      }
 
     case .offline(let snapshot, let detail):
       if let snapshot {
-        SmallDataView(snapshot: snapshot, isDimmed: true, footerText: detail ?? "Offline · Cached")
+        if entry.section == .all {
+          SmallDataView(snapshot: snapshot, repoFilter: entry.repositoryFilter, isDimmed: true, footerText: detail ?? "Offline · Cached")
+        } else {
+          SmallSectionListView(
+            snapshot: snapshot,
+            section: entry.section,
+            repoFilter: entry.repositoryFilter,
+            isDimmed: true,
+            footerText: detail ?? "Offline · Cached"
+          )
+        }
       } else {
         SmallEmptyCardView(
           icon: "wifi.slash",
@@ -267,9 +398,18 @@ private struct SmallWidgetView: View {
 
     case .rateLimited(let snapshot, let resetAt, let detail):
       if let snapshot {
-        SmallDataView(
-          snapshot: snapshot, isDimmed: true,
-          footerText: rateLimitNotice(resetAt: resetAt, detail: detail))
+        let footer = rateLimitNotice(resetAt: resetAt, detail: detail)
+        if entry.section == .all {
+          SmallDataView(snapshot: snapshot, repoFilter: entry.repositoryFilter, isDimmed: true, footerText: footer)
+        } else {
+          SmallSectionListView(
+            snapshot: snapshot,
+            section: entry.section,
+            repoFilter: entry.repositoryFilter,
+            isDimmed: true,
+            footerText: footer
+          )
+        }
       } else {
         SmallEmptyCardView(
           icon: "hourglass",
@@ -284,8 +424,16 @@ private struct SmallWidgetView: View {
 
 private struct SmallDataView: View {
   let snapshot: WidgetSnapshot
+  let repoFilter: String?
   let isDimmed: Bool
   let footerText: String?
+
+  private var headerTitle: String {
+    if let short = shortRepoName(repoFilter) {
+      return short
+    }
+    return "Repo Radar"
+  }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 5) {
@@ -294,9 +442,10 @@ private struct SmallDataView: View {
         Image(systemName: "radar")
           .font(.system(size: 12, weight: .semibold))
           .foregroundStyle(Color.indigo)
-        Text("Repo Radar")
+        Text(headerTitle)
           .font(.system(size: 12.5, weight: .semibold))
           .foregroundStyle(isDimmed ? .secondary : .primary)
+          .lineLimit(1)
 
         Spacer(minLength: 0)
       }
@@ -354,8 +503,145 @@ private struct SmallDataView: View {
   }
 }
 
+/// Section-filtered small widget layout showing a row list of active items for the selected section.
+private struct SmallSectionListView: View {
+  let snapshot: WidgetSnapshot
+  let section: WidgetSectionChoice
+  let repoFilter: String?
+  let isDimmed: Bool
+  let footerText: String?
+
+  private var items: [WidgetDisplayItem] {
+    Array(snapshot.prioritizedWidgetItems().prefix(2))
+  }
+
+  private var headerTitle: String {
+    if let short = shortRepoName(repoFilter) {
+      return "\(short) · \(section.displayName)"
+    }
+    return section.displayName
+  }
+
+  private var itemsCount: Int {
+    switch section {
+    case .all:
+      return snapshot.failingCI.count + snapshot.pullRequests.count + snapshot.staleBranches.count
+    case .failingCI:
+      return snapshot.failingCI.count + snapshot.runningCI.count
+    case .pullRequests:
+      return snapshot.pullRequests.count
+    case .staleBranches:
+      return snapshot.staleBranches.count
+    }
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 5) {
+      // Header
+      HStack(spacing: 5) {
+        Image(systemName: section.iconName)
+          .font(.system(size: 11, weight: .bold))
+          .foregroundStyle(sectionColor(section))
+
+        Text(headerTitle)
+          .font(.system(size: 11.5, weight: .semibold))
+          .foregroundStyle(isDimmed ? .secondary : .primary)
+          .lineLimit(1)
+
+        Spacer(minLength: 0)
+
+        Text("\(itemsCount)")
+          .font(.system(size: 9.5, weight: .bold))
+          .foregroundStyle(.secondary)
+          .padding(.horizontal, 5)
+          .padding(.vertical, 0.5)
+          .background(Color.primary.opacity(0.06), in: Capsule())
+      }
+
+      if items.isEmpty {
+        Spacer(minLength: 0)
+
+        VStack(alignment: .leading, spacing: 3) {
+          Image(systemName: "checkmark.seal.fill")
+            .font(.system(size: 22))
+            .foregroundStyle(.green)
+
+          Text(emptyTitle)
+            .font(.system(size: 13, weight: .semibold))
+
+          Text(emptySubtitle)
+            .font(.system(size: 9.5))
+            .foregroundStyle(.secondary)
+            .lineLimit(2)
+        }
+
+        Spacer(minLength: 0)
+      } else {
+        VStack(alignment: .leading, spacing: 4) {
+          ForEach(items) { item in
+            WidgetRowView(
+              icon: item.iconName,
+              iconColor: item.color,
+              title: item.title,
+              meta: item.subtitle
+            )
+          }
+        }
+        .opacity(isDimmed ? 0.6 : 1.0)
+
+        Spacer(minLength: 0)
+      }
+
+      // Footer
+      HStack {
+        if let footerText {
+          Text(footerText)
+            .font(.system(size: 8.5))
+            .foregroundStyle(.orange)
+            .lineLimit(1)
+        } else {
+          Text("Updated \(timeString(from: snapshot.updatedAt))")
+            .font(.system(size: 9))
+            .foregroundStyle(.tertiary)
+        }
+        Spacer(minLength: 0)
+      }
+    }
+  }
+
+  private var emptyTitle: String {
+    switch section {
+    case .all, .failingCI:
+      return "All CI Passing"
+    case .pullRequests:
+      return "No Open PRs"
+    case .staleBranches:
+      return "No Stale Branches"
+    }
+  }
+
+  private var emptySubtitle: String {
+    switch section {
+    case .all, .failingCI:
+      return "All checks are green."
+    case .pullRequests:
+      return "No open pull requests."
+    case .staleBranches:
+      return "All branches are up to date."
+    }
+  }
+}
+
 private struct SmallAllClearView: View {
   let snapshot: WidgetSnapshot
+  let repoFilter: String?
+
+  private var headerTitle: String {
+    if let short = shortRepoName(repoFilter) {
+      return short
+    }
+    return "Repo Radar"
+  }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 4) {
@@ -363,8 +649,9 @@ private struct SmallAllClearView: View {
         Image(systemName: "radar")
           .font(.system(size: 12, weight: .semibold))
           .foregroundStyle(Color.indigo)
-        Text("Repo Radar")
+        Text(headerTitle)
           .font(.system(size: 12.5, weight: .semibold))
+          .lineLimit(1)
         Spacer()
       }
 
@@ -474,15 +761,26 @@ private struct MediumWidgetView: View {
       )
 
     case .allClear(let snapshot):
-      MediumAllClearView(snapshot: snapshot)
+      MediumAllClearView(snapshot: snapshot, section: entry.section, repoFilter: entry.repositoryFilter)
 
     case .data(let snapshot):
-      MediumDataView(snapshot: snapshot, isDimmed: false, footerText: nil)
+      MediumDataView(
+        snapshot: snapshot,
+        section: entry.section,
+        repoFilter: entry.repositoryFilter,
+        isDimmed: false,
+        footerText: nil
+      )
 
     case .offline(let snapshot, let detail):
       if let snapshot {
         MediumDataView(
-          snapshot: snapshot, isDimmed: true, footerText: detail ?? "Offline · Showing cached data")
+          snapshot: snapshot,
+          section: entry.section,
+          repoFilter: entry.repositoryFilter,
+          isDimmed: true,
+          footerText: detail ?? "Offline · Showing cached data"
+        )
       } else {
         MediumEmptyCardView(
           icon: "wifi.slash",
@@ -495,8 +793,12 @@ private struct MediumWidgetView: View {
     case .rateLimited(let snapshot, let resetAt, let detail):
       if let snapshot {
         MediumDataView(
-          snapshot: snapshot, isDimmed: true,
-          footerText: rateLimitNotice(resetAt: resetAt, detail: detail))
+          snapshot: snapshot,
+          section: entry.section,
+          repoFilter: entry.repositoryFilter,
+          isDimmed: true,
+          footerText: rateLimitNotice(resetAt: resetAt, detail: detail)
+        )
       } else {
         MediumEmptyCardView(
           icon: "hourglass",
@@ -511,6 +813,8 @@ private struct MediumWidgetView: View {
 
 private struct MediumDataView: View {
   let snapshot: WidgetSnapshot
+  let section: WidgetSectionChoice
+  let repoFilter: String?
   let isDimmed: Bool
   let footerText: String?
 
@@ -518,43 +822,66 @@ private struct MediumDataView: View {
     Array(snapshot.prioritizedWidgetItems().prefix(3))
   }
 
+  private var headerTitle: String {
+    if let short = shortRepoName(repoFilter) {
+      if section == .all {
+        return "\(short) · Radar"
+      }
+      return "\(short) · \(section.displayName)"
+    }
+    if section == .all {
+      return "Repo Radar"
+    }
+    return "Repo Radar · \(section.displayName)"
+  }
+
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
       // Header: App name + metric pills
       HStack(spacing: 6) {
-        Image(systemName: "radar")
+        Image(systemName: section.iconName)
           .font(.system(size: 13, weight: .semibold))
-          .foregroundStyle(Color.indigo)
-        Text("Repo Radar")
+          .foregroundStyle(sectionColor(section))
+        Text(headerTitle)
           .font(.system(size: 13, weight: .semibold))
           .foregroundStyle(isDimmed ? .secondary : .primary)
+          .lineLimit(1)
 
         Spacer(minLength: 4)
 
-        HStack(spacing: 4) {
+        if section == .all {
+          HStack(spacing: 4) {
+            MetricPill(
+              count: snapshot.failingCI.count,
+              label: "failing",
+              color: .red,
+              isAlert: snapshot.failingCI.count > 0
+            )
+            MetricPill(
+              count: snapshot.pullRequests.count,
+              label: "PRs",
+              color: Color(red: 0.39, green: 0.40, blue: 0.95),
+              isAlert: false
+            )
+            MetricPill(
+              count: snapshot.pullRequests.filter { $0.isReviewRequested }.count,
+              label: "reviews",
+              color: .purple,
+              isAlert: snapshot.pullRequests.contains { $0.isReviewRequested }
+            )
+            MetricPill(
+              count: snapshot.staleBranches.count,
+              label: "stale",
+              color: .orange,
+              isAlert: false
+            )
+          }
+        } else {
           MetricPill(
-            count: snapshot.failingCI.count,
-            label: "failing",
-            color: .red,
-            isAlert: snapshot.failingCI.count > 0
-          )
-          MetricPill(
-            count: snapshot.pullRequests.count,
-            label: "PRs",
-            color: Color(red: 0.39, green: 0.40, blue: 0.95),
-            isAlert: false
-          )
-          MetricPill(
-            count: snapshot.pullRequests.filter { $0.isReviewRequested }.count,
-            label: "reviews",
-            color: .purple,
-            isAlert: snapshot.pullRequests.contains { $0.isReviewRequested }
-          )
-          MetricPill(
-            count: snapshot.staleBranches.count,
-            label: "stale",
-            color: .orange,
-            isAlert: false
+            count: filteredCount,
+            label: section.displayName.lowercased(),
+            color: sectionColor(section),
+            isAlert: section == .failingCI && filteredCount > 0
           )
         }
       }
@@ -591,19 +918,48 @@ private struct MediumDataView: View {
       }
     }
   }
+
+  private var filteredCount: Int {
+    switch section {
+    case .all:
+      return snapshot.failingCI.count + snapshot.pullRequests.count + snapshot.staleBranches.count
+    case .failingCI:
+      return snapshot.failingCI.count + snapshot.runningCI.count
+    case .pullRequests:
+      return snapshot.pullRequests.count
+    case .staleBranches:
+      return snapshot.staleBranches.count
+    }
+  }
 }
 
 private struct MediumAllClearView: View {
   let snapshot: WidgetSnapshot
+  let section: WidgetSectionChoice
+  let repoFilter: String?
+
+  private var headerTitle: String {
+    if let short = shortRepoName(repoFilter) {
+      if section == .all {
+        return "\(short) · Radar"
+      }
+      return "\(short) · \(section.displayName)"
+    }
+    if section == .all {
+      return "Repo Radar"
+    }
+    return "Repo Radar · \(section.displayName)"
+  }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
       HStack(spacing: 6) {
-        Image(systemName: "radar")
+        Image(systemName: section.iconName)
           .font(.system(size: 13, weight: .semibold))
-          .foregroundStyle(Color.indigo)
-        Text("Repo Radar")
+          .foregroundStyle(sectionColor(section))
+        Text(headerTitle)
           .font(.system(size: 13, weight: .semibold))
+          .lineLimit(1)
 
         Spacer()
 
@@ -620,16 +976,36 @@ private struct MediumAllClearView: View {
           .foregroundStyle(.green)
 
         VStack(alignment: .leading, spacing: 2) {
-          Text("All Clear")
+          Text(clearTitle)
             .font(.system(size: 14, weight: .semibold))
 
-          Text("All CI checks passing and branches up to date.")
+          Text(clearSubtitle)
             .font(.system(size: 11.5))
             .foregroundStyle(.secondary)
         }
       }
 
       Spacer(minLength: 0)
+    }
+  }
+
+  private var clearTitle: String {
+    switch section {
+    case .all: return "All Clear"
+    case .failingCI: return "All CI Passing"
+    case .pullRequests: return "No Open PRs"
+    case .staleBranches: return "No Stale Branches"
+    }
+  }
+
+  private var clearSubtitle: String {
+    switch section {
+    case .all, .failingCI:
+      return "All CI checks passing and branches up to date."
+    case .pullRequests:
+      return "No open pull requests awaiting action."
+    case .staleBranches:
+      return "All branches are active."
     }
   }
 }
@@ -696,8 +1072,7 @@ private struct LargeWidgetView: View {
         icon: "radar",
         iconColor: Color.indigo,
         title: "Welcome to Repo Radar",
-        description:
-          "Open the menu bar app to configure GitHub access. Your widget fills in after the first refresh."
+        description: "Open the menu bar app to configure GitHub access. Your widget fills in after the first refresh."
       )
 
     case .noRepos:
@@ -705,8 +1080,7 @@ private struct LargeWidgetView: View {
         icon: "book.closed",
         iconColor: Color.indigo,
         title: "No Repositories",
-        description:
-          "Add repositories to watch in Settings to see open PRs, CI, and stale branches across your projects."
+        description: "Add repositories to watch in Settings to see open PRs, CI, and stale branches across your projects."
       )
 
     case .tokenError(let detail):
@@ -727,15 +1101,26 @@ private struct LargeWidgetView: View {
       )
 
     case .allClear(let snapshot):
-      LargeAllClearView(snapshot: snapshot)
+      LargeAllClearView(snapshot: snapshot, section: entry.section, repoFilter: entry.repositoryFilter)
 
     case .data(let snapshot):
-      LargeDataView(snapshot: snapshot, isDimmed: false, footerText: nil)
+      LargeDataView(
+        snapshot: snapshot,
+        section: entry.section,
+        repoFilter: entry.repositoryFilter,
+        isDimmed: false,
+        footerText: nil
+      )
 
     case .offline(let snapshot, let detail):
       if let snapshot {
         LargeDataView(
-          snapshot: snapshot, isDimmed: true, footerText: detail ?? "Offline · Showing cached data")
+          snapshot: snapshot,
+          section: entry.section,
+          repoFilter: entry.repositoryFilter,
+          isDimmed: true,
+          footerText: detail ?? "Offline · Showing cached data"
+        )
       } else {
         LargeEmptyCardView(
           icon: "wifi.slash",
@@ -748,8 +1133,12 @@ private struct LargeWidgetView: View {
     case .rateLimited(let snapshot, let resetAt, let detail):
       if let snapshot {
         LargeDataView(
-          snapshot: snapshot, isDimmed: true,
-          footerText: rateLimitNotice(resetAt: resetAt, detail: detail))
+          snapshot: snapshot,
+          section: entry.section,
+          repoFilter: entry.repositoryFilter,
+          isDimmed: true,
+          footerText: rateLimitNotice(resetAt: resetAt, detail: detail)
+        )
       } else {
         LargeEmptyCardView(
           icon: "hourglass",
@@ -764,26 +1153,41 @@ private struct LargeWidgetView: View {
 
 private struct LargeDataView: View {
   let snapshot: WidgetSnapshot
+  let section: WidgetSectionChoice
+  let repoFilter: String?
   let isDimmed: Bool
   let footerText: String?
 
+  private var headerTitle: String {
+    if let short = shortRepoName(repoFilter) {
+      if section == .all {
+        return "\(short) · Repo Radar"
+      }
+      return "\(short) · \(section.displayName)"
+    }
+    if section == .all {
+      return "Repo Radar"
+    }
+    return "Repo Radar · \(section.displayName)"
+  }
+
   private var failingDisplay: [FailingCIItem] {
-    Array(snapshot.failingCI.prefix(2))
+    Array(snapshot.failingCI.prefix(section == .failingCI ? 6 : 2))
   }
 
   private var runningDisplay: [RunningCIItem] {
-    Array(snapshot.runningCI.prefix(1))
+    Array(snapshot.runningCI.prefix(section == .failingCI ? 2 : 1))
   }
 
   private var prDisplay: [ClassifiedPullRequest] {
     let sorted = snapshot.pullRequests.sorted {
       ($0.isReviewRequested ? 0 : 1) < ($1.isReviewRequested ? 0 : 1)
     }
-    return Array(sorted.prefix(2))
+    return Array(sorted.prefix(section == .pullRequests ? 6 : 2))
   }
 
   private var staleDisplay: [StaleBranchItem] {
-    Array(snapshot.staleBranches.prefix(2))
+    Array(snapshot.staleBranches.prefix(section == .staleBranches ? 6 : 2))
   }
 
   var body: some View {
@@ -791,12 +1195,13 @@ private struct LargeDataView: View {
       // Header
       HStack {
         HStack(spacing: 6) {
-          Image(systemName: "radar")
+          Image(systemName: section.iconName)
             .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(Color.indigo)
-          Text("Repo Radar")
+            .foregroundStyle(sectionColor(section))
+          Text(headerTitle)
             .font(.system(size: 14, weight: .semibold))
             .foregroundStyle(isDimmed ? .secondary : .primary)
+            .lineLimit(1)
         }
 
         Spacer()
@@ -822,116 +1227,121 @@ private struct LargeDataView: View {
         .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
       }
 
-      // 4 Metric Count Tiles
-      HStack(spacing: 6) {
-        MetricTile(
-          title: "Failing",
-          count: snapshot.failingCI.count,
-          color: .red,
-          isAlert: snapshot.failingCI.count > 0
-        )
-        MetricTile(
-          title: "PRs",
-          count: snapshot.pullRequests.count,
-          color: Color(red: 0.39, green: 0.40, blue: 0.95),
-          isAlert: false
-        )
-        MetricTile(
-          title: "Reviews",
-          count: snapshot.pullRequests.filter { $0.isReviewRequested }.count,
-          color: .purple,
-          isAlert: snapshot.pullRequests.contains { $0.isReviewRequested }
-        )
-        MetricTile(
-          title: "Stale",
-          count: snapshot.staleBranches.count,
-          color: .orange,
-          isAlert: false
-        )
-      }
-      .opacity(isDimmed ? 0.6 : 1.0)
+      // Metric Tiles
+      if section == .all {
+        HStack(spacing: 6) {
+          MetricTile(
+            title: "Failing",
+            count: snapshot.failingCI.count,
+            color: .red,
+            isAlert: snapshot.failingCI.count > 0
+          )
+          MetricTile(
+            title: "PRs",
+            count: snapshot.pullRequests.count,
+            color: Color(red: 0.39, green: 0.40, blue: 0.95),
+            isAlert: false
+          )
+          MetricTile(
+            title: "Reviews",
+            count: snapshot.pullRequests.filter { $0.isReviewRequested }.count,
+            color: .purple,
+            isAlert: snapshot.pullRequests.contains { $0.isReviewRequested }
+          )
+          MetricTile(
+            title: "Stale",
+            count: snapshot.staleBranches.count,
+            color: .orange,
+            isAlert: false
+          )
+        }
+        .opacity(isDimmed ? 0.6 : 1.0)
 
-      Divider()
-        .padding(.vertical, 1)
+        Divider()
+          .padding(.vertical, 1)
+      }
 
       // Sections in priority order: Failing CI, PRs, Stale branches
       VStack(alignment: .leading, spacing: 8) {
         // Section 1: Failing CI
-        if !snapshot.failingCI.isEmpty || !snapshot.runningCI.isEmpty {
-          VStack(alignment: .leading, spacing: 3) {
-            WidgetSectionHeader(
-              icon: "xmark.circle.fill",
-              iconColor: .red,
-              title: "FAILING CI",
-              count: snapshot.failingCI.count + snapshot.runningCI.count
-            )
-
-            ForEach(failingDisplay) { item in
-              let timeText =
-                item.completedAt.map { WidgetSnapshot.relativeTimeString(from: $0) } ?? "failed"
-              WidgetRowView(
+        if section == .all || section == .failingCI {
+          if !snapshot.failingCI.isEmpty || !snapshot.runningCI.isEmpty {
+            VStack(alignment: .leading, spacing: 3) {
+              WidgetSectionHeader(
                 icon: "xmark.circle.fill",
                 iconColor: .red,
-                title: "\(item.repo) · \(item.ref)",
-                meta: "\(item.check) · \(timeText)"
+                title: "FAILING CI",
+                count: snapshot.failingCI.count + snapshot.runningCI.count
               )
-            }
 
-            ForEach(runningDisplay) { item in
-              WidgetRowView(
-                icon: "circle.dashed",
-                iconColor: .secondary,
-                title: "\(item.repo) · \(item.ref)",
-                meta: "\(item.check) · running"
-              )
+              ForEach(failingDisplay) { item in
+                let timeText = item.completedAt.map { WidgetSnapshot.relativeTimeString(from: $0) } ?? "failed"
+                WidgetRowView(
+                  icon: "xmark.circle.fill",
+                  iconColor: .red,
+                  title: "\(item.repo) · \(item.ref)",
+                  meta: "\(item.check) · \(timeText)"
+                )
+              }
+
+              ForEach(runningDisplay) { item in
+                WidgetRowView(
+                  icon: "circle.dashed",
+                  iconColor: .secondary,
+                  title: "\(item.repo) · \(item.ref)",
+                  meta: "\(item.check) · running"
+                )
+              }
             }
           }
         }
 
         // Section 2: Pull Requests
-        if !snapshot.pullRequests.isEmpty {
-          VStack(alignment: .leading, spacing: 3) {
-            WidgetSectionHeader(
-              icon: "arrow.triangle.pull",
-              iconColor: Color(red: 0.39, green: 0.40, blue: 0.95),
-              title: "PULL REQUESTS",
-              count: snapshot.pullRequests.count
-            )
-
-            ForEach(prDisplay) { pr in
-              let timeText = WidgetSnapshot.relativeTimeString(from: pr.updatedAt)
-              let meta =
-                pr.isReviewRequested
-                ? "\(pr.repo) #\(pr.number) · review requested · \(timeText)"
-                : "\(pr.repo) #\(pr.number) · \(timeText)"
-              WidgetRowView(
-                icon: pr.isReviewRequested ? "eye" : "arrow.triangle.pull",
-                iconColor: pr.isReviewRequested
-                  ? .purple : Color(red: 0.39, green: 0.40, blue: 0.95),
-                title: pr.title,
-                meta: meta
+        if section == .all || section == .pullRequests {
+          if !snapshot.pullRequests.isEmpty {
+            VStack(alignment: .leading, spacing: 3) {
+              WidgetSectionHeader(
+                icon: "arrow.triangle.pull",
+                iconColor: Color(red: 0.39, green: 0.40, blue: 0.95),
+                title: "PULL REQUESTS",
+                count: snapshot.pullRequests.count
               )
+
+              ForEach(prDisplay) { pr in
+                let timeText = WidgetSnapshot.relativeTimeString(from: pr.updatedAt)
+                let meta = pr.isReviewRequested
+                  ? "\(pr.repo) #\(pr.number) · review requested · \(timeText)"
+                  : "\(pr.repo) #\(pr.number) · \(timeText)"
+                WidgetRowView(
+                  icon: pr.isReviewRequested ? "eye" : "arrow.triangle.pull",
+                  iconColor: pr.isReviewRequested ? .purple : Color(red: 0.39, green: 0.40, blue: 0.95),
+                  title: pr.title,
+                  meta: meta
+                )
+              }
             }
           }
         }
 
         // Section 3: Stale Branches
-        if !snapshot.staleBranches.isEmpty {
-          VStack(alignment: .leading, spacing: 3) {
-            WidgetSectionHeader(
-              icon: "arrow.triangle.branch",
-              iconColor: .orange,
-              title: "STALE BRANCHES",
-              count: snapshot.staleBranches.count
-            )
-
-            ForEach(staleDisplay) { item in
-              WidgetRowView(
+        if section == .all || section == .staleBranches {
+          if !snapshot.staleBranches.isEmpty {
+            VStack(alignment: .leading, spacing: 3) {
+              WidgetSectionHeader(
                 icon: "arrow.triangle.branch",
                 iconColor: .orange,
-                title: item.branch,
-                meta: "\(item.repo) · \(item.ageDays)d"
+                title: "STALE BRANCHES",
+                count: snapshot.staleBranches.count
               )
+
+              ForEach(staleDisplay) { item in
+                WidgetRowView(
+                  icon: "arrow.triangle.branch",
+                  iconColor: .orange,
+                  title: item.branch,
+                  meta: "\(item.repo) · \(item.ageDays)d"
+                )
+              }
             }
           }
         }
@@ -945,16 +1355,32 @@ private struct LargeDataView: View {
 
 private struct LargeAllClearView: View {
   let snapshot: WidgetSnapshot
+  let section: WidgetSectionChoice
+  let repoFilter: String?
+
+  private var headerTitle: String {
+    if let short = shortRepoName(repoFilter) {
+      if section == .all {
+        return "\(short) · Repo Radar"
+      }
+      return "\(short) · \(section.displayName)"
+    }
+    if section == .all {
+      return "Repo Radar"
+    }
+    return "Repo Radar · \(section.displayName)"
+  }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
       HStack {
         HStack(spacing: 6) {
-          Image(systemName: "radar")
+          Image(systemName: section.iconName)
             .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(Color.indigo)
-          Text("Repo Radar")
+            .foregroundStyle(sectionColor(section))
+          Text(headerTitle)
             .font(.system(size: 14, weight: .semibold))
+            .lineLimit(1)
         }
 
         Spacer()
@@ -964,36 +1390,38 @@ private struct LargeAllClearView: View {
           .foregroundStyle(.tertiary)
       }
 
-      // 4 Metric Count Tiles showing all clear
-      HStack(spacing: 6) {
-        MetricTile(
-          title: "CI passing",
-          count: 0,
-          color: .green,
-          isAlert: false
-        )
-        MetricTile(
-          title: "PRs",
-          count: 0,
-          color: Color(red: 0.39, green: 0.40, blue: 0.95),
-          isAlert: false
-        )
-        MetricTile(
-          title: "Reviews",
-          count: 0,
-          color: .purple,
-          isAlert: false
-        )
-        MetricTile(
-          title: "Stale",
-          count: 0,
-          color: .orange,
-          isAlert: false
-        )
-      }
+      if section == .all {
+        // 4 Metric Count Tiles showing all clear
+        HStack(spacing: 6) {
+          MetricTile(
+            title: "CI passing",
+            count: 0,
+            color: .green,
+            isAlert: false
+          )
+          MetricTile(
+            title: "PRs",
+            count: 0,
+            color: Color(red: 0.39, green: 0.40, blue: 0.95),
+            isAlert: false
+          )
+          MetricTile(
+            title: "Reviews",
+            count: 0,
+            color: .purple,
+            isAlert: false
+          )
+          MetricTile(
+            title: "Stale",
+            count: 0,
+            color: .orange,
+            isAlert: false
+          )
+        }
 
-      Divider()
-        .padding(.vertical, 2)
+        Divider()
+          .padding(.vertical, 2)
+      }
 
       Spacer(minLength: 0)
 
@@ -1002,10 +1430,10 @@ private struct LargeAllClearView: View {
           .font(.system(size: 38))
           .foregroundStyle(.green)
 
-        Text("All Clear")
+        Text(clearTitle)
           .font(.system(size: 16, weight: .semibold))
 
-        Text("All CI checks passing and branches up to date.")
+        Text(clearSubtitle)
           .font(.system(size: 12))
           .foregroundStyle(.secondary)
           .multilineTextAlignment(.center)
@@ -1013,6 +1441,26 @@ private struct LargeAllClearView: View {
       .frame(maxWidth: .infinity)
 
       Spacer(minLength: 0)
+    }
+  }
+
+  private var clearTitle: String {
+    switch section {
+    case .all: return "All Clear"
+    case .failingCI: return "All CI Passing"
+    case .pullRequests: return "No Open PRs"
+    case .staleBranches: return "No Stale Branches"
+    }
+  }
+
+  private var clearSubtitle: String {
+    switch section {
+    case .all, .failingCI:
+      return "All CI checks passing and branches up to date."
+    case .pullRequests:
+      return "No open pull requests awaiting action."
+    case .staleBranches:
+      return "All branches are up to date."
     }
   }
 }
@@ -1073,12 +1521,18 @@ private struct LargeEmptyCardView: View {
   }
 }
 
+// MARK: - Widget Main
+
 @main
 struct RepoRadarWidget: Widget {
   let kind: String = "RepoRadarWidget"
 
   var body: some WidgetConfiguration {
-    StaticConfiguration(kind: kind, provider: Provider()) { entry in
+    AppIntentConfiguration(
+      kind: kind,
+      intent: RepoRadarWidgetConfigurationIntent.self,
+      provider: Provider()
+    ) { entry in
       RepoRadarWidgetEntryView(entry: entry)
     }
     .configurationDisplayName("Repo Radar")
@@ -1093,6 +1547,37 @@ struct RepoRadarWidget: Widget {
   RepoRadarWidget()
 } timeline: {
   RepoRadarWidgetEntry.previewData
+}
+
+#Preview("Failing CI - Small", as: .systemSmall) {
+  RepoRadarWidget()
+} timeline: {
+  RepoRadarWidgetEntry(
+    date: Date(),
+    state: .data(RepoRadarWidgetEntry.previewData.snapshot!.filtered(section: .failingCI)),
+    section: .failingCI
+  )
+}
+
+#Preview("Pull Requests - Small", as: .systemSmall) {
+  RepoRadarWidget()
+} timeline: {
+  RepoRadarWidgetEntry(
+    date: Date(),
+    state: .data(RepoRadarWidgetEntry.previewData.snapshot!.filtered(section: .pullRequests)),
+    section: .pullRequests
+  )
+}
+
+#Preview("Repo Filtered - Small", as: .systemSmall) {
+  RepoRadarWidget()
+} timeline: {
+  RepoRadarWidgetEntry(
+    date: Date(),
+    state: .data(RepoRadarWidgetEntry.previewData.snapshot!.filtered(repository: "Cwander83/repo-radar")),
+    section: .all,
+    repositoryFilter: "Cwander83/repo-radar"
+  )
 }
 
 #Preview("All Clear - Small", as: .systemSmall) {
@@ -1145,28 +1630,31 @@ struct RepoRadarWidget: Widget {
   RepoRadarWidgetEntry.previewData
 }
 
+#Preview("Failing CI - Medium", as: .systemMedium) {
+  RepoRadarWidget()
+} timeline: {
+  RepoRadarWidgetEntry(
+    date: Date(),
+    state: .data(RepoRadarWidgetEntry.previewData.snapshot!.filtered(section: .failingCI)),
+    section: .failingCI
+  )
+}
+
+#Preview("Repo Filtered - Medium", as: .systemMedium) {
+  RepoRadarWidget()
+} timeline: {
+  RepoRadarWidgetEntry(
+    date: Date(),
+    state: .data(RepoRadarWidgetEntry.previewData.snapshot!.filtered(repository: "Cwander83/gravity-bar")),
+    section: .all,
+    repositoryFilter: "Cwander83/gravity-bar"
+  )
+}
+
 #Preview("All Clear - Medium", as: .systemMedium) {
   RepoRadarWidget()
 } timeline: {
   RepoRadarWidgetEntry.previewAllClear
-}
-
-#Preview("First Run - Medium", as: .systemMedium) {
-  RepoRadarWidget()
-} timeline: {
-  RepoRadarWidgetEntry.previewFirstRun
-}
-
-#Preview("No Repos - Medium", as: .systemMedium) {
-  RepoRadarWidget()
-} timeline: {
-  RepoRadarWidgetEntry.previewNoRepos
-}
-
-#Preview("Token Error - Medium", as: .systemMedium) {
-  RepoRadarWidget()
-} timeline: {
-  RepoRadarWidgetEntry.previewTokenError
 }
 
 #Preview("Offline - Medium", as: .systemMedium) {
@@ -1181,12 +1669,6 @@ struct RepoRadarWidget: Widget {
   RepoRadarWidgetEntry.previewRateLimited
 }
 
-#Preview("Error - Medium", as: .systemMedium) {
-  RepoRadarWidget()
-} timeline: {
-  RepoRadarWidgetEntry.previewError
-}
-
 // MARK: - Previews: Large
 
 #Preview("Data - Large", as: .systemLarge) {
@@ -1195,44 +1677,29 @@ struct RepoRadarWidget: Widget {
   RepoRadarWidgetEntry.previewData
 }
 
+#Preview("Pull Requests - Large", as: .systemLarge) {
+  RepoRadarWidget()
+} timeline: {
+  RepoRadarWidgetEntry(
+    date: Date(),
+    state: .data(RepoRadarWidgetEntry.previewData.snapshot!.filtered(section: .pullRequests)),
+    section: .pullRequests
+  )
+}
+
+#Preview("Repo Filtered - Large", as: .systemLarge) {
+  RepoRadarWidget()
+} timeline: {
+  RepoRadarWidgetEntry(
+    date: Date(),
+    state: .data(RepoRadarWidgetEntry.previewData.snapshot!.filtered(repository: "Cwander83/repo-radar")),
+    section: .all,
+    repositoryFilter: "Cwander83/repo-radar"
+  )
+}
+
 #Preview("All Clear - Large", as: .systemLarge) {
   RepoRadarWidget()
 } timeline: {
   RepoRadarWidgetEntry.previewAllClear
-}
-
-#Preview("First Run - Large", as: .systemLarge) {
-  RepoRadarWidget()
-} timeline: {
-  RepoRadarWidgetEntry.previewFirstRun
-}
-
-#Preview("No Repos - Large", as: .systemLarge) {
-  RepoRadarWidget()
-} timeline: {
-  RepoRadarWidgetEntry.previewNoRepos
-}
-
-#Preview("Token Error - Large", as: .systemLarge) {
-  RepoRadarWidget()
-} timeline: {
-  RepoRadarWidgetEntry.previewTokenError
-}
-
-#Preview("Offline - Large", as: .systemLarge) {
-  RepoRadarWidget()
-} timeline: {
-  RepoRadarWidgetEntry.previewOffline
-}
-
-#Preview("Rate Limited - Large", as: .systemLarge) {
-  RepoRadarWidget()
-} timeline: {
-  RepoRadarWidgetEntry.previewRateLimited
-}
-
-#Preview("Error - Large", as: .systemLarge) {
-  RepoRadarWidget()
-} timeline: {
-  RepoRadarWidgetEntry.previewError
 }

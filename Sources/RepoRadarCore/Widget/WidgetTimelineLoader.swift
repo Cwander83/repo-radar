@@ -8,6 +8,8 @@ public struct RepoRadarWidgetEntry: Sendable, Equatable {
   public let date: Date
   public let state: WidgetState
   public let watchedRepos: [String]
+  public let section: WidgetSectionChoice
+  public let repositoryFilter: String?
 
   public var snapshot: WidgetSnapshot? {
     state.snapshot
@@ -16,11 +18,15 @@ public struct RepoRadarWidgetEntry: Sendable, Equatable {
   public init(
     date: Date = Date(),
     state: WidgetState,
-    watchedRepos: [String] = []
+    watchedRepos: [String] = [],
+    section: WidgetSectionChoice = .all,
+    repositoryFilter: String? = nil
   ) {
     self.date = date
     self.state = state
     self.watchedRepos = watchedRepos
+    self.section = section
+    self.repositoryFilter = repositoryFilter
   }
 }
 
@@ -41,26 +47,64 @@ public final class WidgetTimelineLoader: Sendable {
     self.configStore = configStore
   }
 
-  /// Loads the latest snapshot and config to build the active widget entry.
-  public func loadEntry(now: Date = Date()) -> RepoRadarWidgetEntry {
+  /// Loads the latest snapshot and config to build the active widget entry, applying optional section and repo filters.
+  public func loadEntry(
+    section: WidgetSectionChoice = .all,
+    repository: String? = nil,
+    now: Date = Date()
+  ) -> RepoRadarWidgetEntry {
     let watchedRepos = configStore?.load().watchedRepos ?? []
 
     guard let snapshotStore else {
       return RepoRadarWidgetEntry(
         date: now,
         state: .error(detail: "App Group container unavailable"),
-        watchedRepos: watchedRepos
+        watchedRepos: watchedRepos,
+        section: section,
+        repositoryFilter: repository
       )
     }
 
     let readResult = snapshotStore.readResult()
-    let state = WidgetState.current(readResult: readResult, watchedRepos: watchedRepos)
+    switch readResult {
+    case .missing:
+      return RepoRadarWidgetEntry(
+        date: now,
+        state: .firstRun,
+        watchedRepos: watchedRepos,
+        section: section,
+        repositoryFilter: repository
+      )
 
-    return RepoRadarWidgetEntry(
-      date: now,
-      state: state,
-      watchedRepos: watchedRepos
-    )
+    case .corrupt(let detail):
+      return RepoRadarWidgetEntry(
+        date: now,
+        state: .error(detail: detail),
+        watchedRepos: watchedRepos,
+        section: section,
+        repositoryFilter: repository
+      )
+
+    case .unsupportedVersion(let version):
+      return RepoRadarWidgetEntry(
+        date: now,
+        state: .error(detail: "Unsupported snapshot version \(version). Update Repo Radar."),
+        watchedRepos: watchedRepos,
+        section: section,
+        repositoryFilter: repository
+      )
+
+    case .success(let rawSnapshot):
+      let filteredSnapshot = rawSnapshot.filtered(section: section, repository: repository)
+      let state = WidgetState.current(snapshot: filteredSnapshot, watchedRepos: watchedRepos)
+      return RepoRadarWidgetEntry(
+        date: now,
+        state: state,
+        watchedRepos: watchedRepos,
+        section: section,
+        repositoryFilter: repository
+      )
+    }
   }
 }
 
