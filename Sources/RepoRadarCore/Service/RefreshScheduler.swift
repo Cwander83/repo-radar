@@ -71,6 +71,20 @@ public final class RefreshScheduler: ObservableObject {
     latestSnapshot?.staleBranches.count ?? 0
   }
 
+  /// Current menu bar state derived from snapshot status, failing CI count, and configuration.
+  public var menuBarState: MenuBarState {
+    let config = service.configStore.load()
+    let hasToken = service.tokenStore.hasToken()
+    let hasWatchedRepos = !config.watchedRepos.isEmpty
+    return MenuBarState.current(
+      status: status,
+      failingCICount: failingCICount,
+      showMenuBarCount: config.showMenuBarCount,
+      hasToken: hasToken,
+      hasWatchedRepos: hasWatchedRepos
+    )
+  }
+
   // MARK: - Initialization
 
   /// Creates a scheduler with explicit dependencies.
