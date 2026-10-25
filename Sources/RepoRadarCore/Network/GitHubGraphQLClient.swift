@@ -1,5 +1,42 @@
 import Foundation
 
+/// Parsed token validation result containing viewer, budget, and optional expiration.
+public struct TokenValidationResult: Equatable, Sendable {
+  public let viewer: String
+  public let rateLimit: RateLimit?
+  public let expiresAt: Date?
+
+  public init(viewer: String, rateLimit: RateLimit?, expiresAt: Date? = nil) {
+    self.viewer = viewer
+    self.rateLimit = rateLimit
+    self.expiresAt = expiresAt
+  }
+}
+
+/// Utility for parsing HTTP response headers returned by GitHub API.
+public enum GitHubHeaderDateParser {
+  public static func parseExpirationDate(_ string: String) -> Date? {
+    let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return nil }
+
+    if let date = try? Date(trimmed, strategy: .iso8601) {
+      return date
+    }
+
+    let df = DateFormatter()
+    df.dateFormat = "yyyy-MM-dd HH:mm:ss zzz"
+    df.locale = Locale(identifier: "en_US_POSIX")
+    df.timeZone = TimeZone(secondsFromGMT: 0)
+    if let date = df.date(from: trimmed) {
+      return date
+    }
+
+    let iso = ISO8601DateFormatter()
+    iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return iso.date(from: trimmed)
+  }
+}
+
 /// URLSession-based client for the GitHub GraphQL API (`https://api.github.com/graphql`).
 public final class GitHubGraphQLClient: Sendable {
   public static let defaultEndpoint = URL(string: "https://api.github.com/graphql")!
@@ -28,11 +65,105 @@ public final class GitHubGraphQLClient: Sendable {
   public func validateToken(
     token: String
   ) async throws -> (viewer: String, rateLimit: RateLimit?) {
-    let response = try await fetch(search: "", token: token)
-    guard let data = response.data else {
-      throw RepoRadarError.decodingError(detail: "Missing viewer in GraphQL response.")
+    let result = try await validateTokenDetails(token: token)
+    return (result.viewer, result.rateLimit)
+  }
+
+  /// Validates a GitHub token and retrieves viewer login, API budget, and expiration from response headers.
+  public func validateTokenDetails(
+    token: String
+  ) async throws -> TokenValidationResult {
+    let trimmedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedToken.isEmpty else {
+      throw RepoRadarError.tokenMissing
     }
-    return (data.viewer.login, data.rateLimit)
+
+    var request = URLRequest(url: endpoint)
+    request.httpMethod = "POST"
+    request.setValue("Bearer \(trimmedToken)", forHTTPHeaderField: "Authorization")
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+    request.setValue("RepoRadar", forHTTPHeaderField: "User-Agent")
+
+    let body = RepoRadarQuery.RequestBody(search: "")
+    do {
+      request.httpBody = try JSONEncoder().encode(body)
+    } catch {
+      throw RepoRadarError.decodingError(detail: "Failed to encode request body: \(error)")
+    }
+
+    let data: Data
+    let response: URLResponse
+    do {
+      (data, response) = try await session.data(for: request)
+    } catch let urlError as URLError where urlError.code == .cancelled {
+      throw CancellationError()
+    } catch is CancellationError {
+      throw CancellationError()
+    } catch let urlError as URLError {
+      throw RepoRadarError.offline(detail: urlError.localizedDescription)
+    } catch {
+      throw RepoRadarError.offline(detail: error.localizedDescription)
+    }
+
+    guard let httpResponse = response as? HTTPURLResponse else {
+      throw RepoRadarError.offline(detail: "Invalid response from server.")
+    }
+
+    var expiresAt: Date?
+    if let expHeader = httpResponse.value(forHTTPHeaderField: "github-authentication-token-expiration") {
+      expiresAt = GitHubHeaderDateParser.parseExpirationDate(expHeader)
+    }
+
+    var bodyMessage: String?
+    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+      let msg = json["message"] as? String
+    {
+      bodyMessage = msg
+    }
+
+    switch httpResponse.statusCode {
+    case 200:
+      let queryResponse: GraphQLQueryResponse
+      do {
+        queryResponse = try RepoRadarDecoder.decode(from: data)
+      } catch {
+        throw RepoRadarError.decodingError(detail: error.localizedDescription)
+      }
+
+      guard let responseData = queryResponse.data else {
+        if let errors = queryResponse.errors, !errors.isEmpty {
+          for err in errors {
+            let msg = err.message.lowercased()
+            if msg.contains("bad credentials") || msg.contains("resource not accessible")
+              || msg.contains("requires authentication")
+            {
+              throw RepoRadarError.tokenUnauthorized(detail: err.message)
+            }
+          }
+          throw RepoRadarError.graphQL(errors: errors)
+        }
+        throw RepoRadarError.decodingError(detail: "Missing viewer in GraphQL response.")
+      }
+
+      return TokenValidationResult(
+        viewer: responseData.viewer.login,
+        rateLimit: responseData.rateLimit,
+        expiresAt: expiresAt
+      )
+
+    case 401:
+      throw RepoRadarError.tokenUnauthorized(detail: bodyMessage ?? "Bad credentials")
+
+    case 403:
+      throw RepoRadarError.tokenUnauthorized(detail: bodyMessage ?? "Forbidden")
+
+    default:
+      throw RepoRadarError.serverError(
+        statusCode: httpResponse.statusCode,
+        detail: bodyMessage ?? HTTPURLResponse.localizedString(forStatusCode: httpResponse.statusCode)
+      )
+    }
   }
 
   /// Executes the RepoRadar query with a custom search string.

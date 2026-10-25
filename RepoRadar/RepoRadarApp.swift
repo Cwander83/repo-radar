@@ -39,6 +39,11 @@ struct RepoRadarApp: App {
   @StateObject private var model = AppModel()
 
   init() {
+    #if DEBUG
+    if CommandLine.arguments.contains("--verify-keychain") {
+      runKeychainVerification()
+    }
+    #endif
     NSApplication.shared.setActivationPolicy(.accessory)
   }
 
@@ -164,3 +169,29 @@ private struct AppGroupUnavailableView: View {
     .padding()
     .preferredColorScheme(.dark)
 }
+
+#if DEBUG
+private func runKeychainVerification() {
+  let testAccount = "verify-sandbox-\(UUID().uuidString)"
+  let testStore = KeychainTokenStore(account: testAccount)
+  defer { try? testStore.delete() }
+  do {
+    let testToken = "test-token-\(UUID().uuidString)"
+    try testStore.save(token: testToken)
+    guard try testStore.read() == testToken else {
+      fputs("KEYCHAIN VERIFICATION FAILED: read mismatch\n", stderr)
+      exit(1)
+    }
+    try testStore.delete()
+    guard try testStore.read() == nil else {
+      fputs("KEYCHAIN VERIFICATION FAILED: token still present after delete\n", stderr)
+      exit(1)
+    }
+    fputs("KEYCHAIN VERIFICATION SUCCESS\n", stdout)
+    exit(0)
+  } catch {
+    fputs("KEYCHAIN VERIFICATION FAILED: \(error)\n", stderr)
+    exit(1)
+  }
+}
+#endif
