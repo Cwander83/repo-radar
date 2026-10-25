@@ -45,7 +45,7 @@ public struct SettingsView: View {
 
   public init(
     configStore: ConfigStore,
-    tokenStore: any TokenStore = KeychainTokenStore(),
+    tokenStore: any TokenStore,
     snapshot: WidgetSnapshot? = nil,
     snapshotPublisher: AnyPublisher<WidgetSnapshot?, Never>? = nil,
     initialTab: SettingsTab = .general,
@@ -63,17 +63,16 @@ public struct SettingsView: View {
 
   public init(
     configStore: ConfigStore,
-    tokenStore: (any TokenStore)? = nil,
-    scheduler: RefreshScheduler?,
+    scheduler: RefreshScheduler,
     initialTab: SettingsTab = .general,
     onConfigChange: ((RepoRadarConfig) -> Void)? = nil,
     onRefreshRequest: (() -> Void)? = nil
   ) {
     self.init(
       configStore: configStore,
-      tokenStore: tokenStore ?? scheduler?.service.tokenStore ?? KeychainTokenStore(),
-      snapshot: scheduler?.latestSnapshot,
-      snapshotPublisher: scheduler?.$latestSnapshot.eraseToAnyPublisher(),
+      tokenStore: scheduler.service.tokenStore,
+      snapshot: scheduler.latestSnapshot,
+      snapshotPublisher: scheduler.$latestSnapshot.eraseToAnyPublisher(),
       initialTab: initialTab,
       onConfigChange: onConfigChange,
       onRefreshRequest: onRefreshRequest
@@ -372,7 +371,7 @@ public struct GitHubSettingsView: View {
 
   public init(
     tokenStore: any TokenStore,
-    configStore: ConfigStore? = nil,
+    configStore: ConfigStore,
     snapshot: WidgetSnapshot? = nil,
     snapshotPublisher: AnyPublisher<WidgetSnapshot?, Never>? = nil,
     onRefreshRequest: (() -> Void)? = nil
@@ -682,6 +681,7 @@ private func makePreviewSnapshot() -> WidgetSnapshot {
 #Preview("Settings Window - Repositories - Light") {
   SettingsView(
     configStore: makePreviewStore(),
+    tokenStore: makePreviewValidTokenStore(),
     snapshot: makePreviewSnapshot(),
     initialTab: .repositories
   )
@@ -691,6 +691,7 @@ private func makePreviewSnapshot() -> WidgetSnapshot {
 #Preview("Settings Window - Repositories - Dark") {
   SettingsView(
     configStore: makePreviewStore(),
+    tokenStore: makePreviewValidTokenStore(),
     snapshot: makePreviewSnapshot(),
     initialTab: .repositories
   )

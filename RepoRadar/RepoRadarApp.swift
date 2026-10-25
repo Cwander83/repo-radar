@@ -60,10 +60,10 @@ struct RepoRadarApp: App {
     .menuBarExtraStyle(.window)
 
     Settings {
-      if let configStore = model.configStore {
+      if let configStore = model.configStore, let scheduler = model.scheduler {
         SettingsView(
           configStore: configStore,
-          scheduler: model.scheduler,
+          scheduler: scheduler,
           onConfigChange: { config in
             model.handleConfigChanged(config)
           },

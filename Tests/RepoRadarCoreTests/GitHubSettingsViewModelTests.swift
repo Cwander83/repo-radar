@@ -219,6 +219,100 @@ struct GitHubSettingsViewModelTests {
     #expect(refreshCount == 1)
   }
 
+  @Test("Failed token removal sets error and preserves token state")
+  @MainActor
+  func failedRemoveLeavesTokenStateIntact() {
+    let (defaults, suite) = makeTestDefaults()
+    defer { defaults.removePersistentDomain(forName: suite) }
+
+    struct FailingTokenStore: TokenStore {
+      func read() throws -> String? { "github_pat_persistent" }
+      func save(token: String) throws {}
+      func delete() throws {
+        throw KeychainError.osStatus(status: -25299, message: "Keychain locked or inaccessible")
+      }
+      func hasToken() -> Bool { true }
+    }
+
+    let tokenStore = FailingTokenStore()
+    let configStore = ConfigStore(userDefaults: defaults)
+    defaults.set("Cwander83", forKey: GitHubSettingsViewModel.CacheKeys.cachedAccount)
+    var refreshCount = 0
+
+    let vm = GitHubSettingsViewModel(
+      tokenStore: tokenStore,
+      configStore: configStore,
+      onRefreshRequest: { refreshCount += 1 }
+    )
+
+    #expect(vm.hasToken == true)
+    vm.removeToken()
+
+    #expect(vm.validationError?.contains("Failed to remove token") == true)
+    #expect(vm.hasToken == true)
+    #expect(vm.status == .valid)
+    #expect(vm.account == "Cwander83")
+    #expect(defaults.string(forKey: GitHubSettingsViewModel.CacheKeys.cachedAccount) == "Cwander83")
+    #expect(refreshCount == 0)
+  }
+
+  @Test("Validation handles rate limit errors with specific message")
+  @MainActor
+  func validationHandlesRateLimitError() async {
+    let (defaults, suite) = makeTestDefaults()
+    defer { defaults.removePersistentDomain(forName: suite) }
+
+    let tokenStore = InMemoryTokenStore()
+    let configStore = ConfigStore(userDefaults: defaults)
+
+    let vm = GitHubSettingsViewModel(
+      tokenStore: tokenStore,
+      configStore: configStore,
+      tokenValidator: { _ in
+        throw RepoRadarError.rateLimited(resetAt: Date().addingTimeInterval(1800))
+      }
+    )
+
+    vm.tokenInput = "github_pat_valid_but_limited"
+    await vm.saveToken()
+
+    #expect(vm.validationError?.contains("rate limit exceeded") == true)
+    #expect(vm.hasToken == false)
+  }
+
+  @Test("Table facts show dash when rate limit or repository access is unknown")
+  @MainActor
+  func factsShowDashWhenUnknown() {
+    let (defaults, suite) = makeTestDefaults()
+    defer { defaults.removePersistentDomain(forName: suite) }
+
+    let tokenStore = InMemoryTokenStore(initialToken: "github_pat_valid")
+    let configStore = ConfigStore(userDefaults: defaults)
+
+    let vm = GitHubSettingsViewModel(
+      tokenStore: tokenStore,
+      configStore: configStore,
+      snapshot: nil
+    )
+
+    #expect(vm.apiBudgetText == "—")
+    #expect(vm.repositoryAccessText == "—")
+
+    // Deliver snapshot with repository access and rate limit
+    let snapshot = WidgetSnapshot(
+      status: .ok,
+      repositoryAccess: [
+        RepositoryAccessItem(name: "Cwander83/repo-radar", defaultBranch: "main", hasAccess: true),
+        RepositoryAccessItem(name: "Cwander83/private-repo", defaultBranch: nil, hasAccess: false)
+      ],
+      rateLimit: SnapshotRateLimit(remaining: 4500, limit: 5000, resetAt: Date(), cost: 1)
+    )
+    vm.updateFromSnapshot(snapshot)
+
+    #expect(vm.apiBudgetText == "4,500 of 5,000 points left")
+    #expect(vm.repositoryAccessText == "1 of 2 watched repos readable")
+  }
+
   @Test("Snapshot delivery updates rate limit, last refresh date, and error state")
   @MainActor
   func liveSnapshotUpdatesMetadata() {

@@ -34,7 +34,7 @@ public typealias TokenValidator = @Sendable (String) async throws -> TokenValida
 @MainActor
 public final class GitHubSettingsViewModel: ObservableObject {
   public let tokenStore: any TokenStore
-  public let configStore: ConfigStore?
+  public let configStore: ConfigStore
   public let client: GitHubGraphQLClient
   public var tokenValidator: TokenValidator?
   public var onRefreshRequest: (() -> Void)?
@@ -49,6 +49,7 @@ public final class GitHubSettingsViewModel: ObservableObject {
   @Published public var expiresAt: Date?
   @Published public var rateLimit: SnapshotRateLimit?
   @Published public var lastRefreshDate: Date?
+  @Published public var latestSnapshot: WidgetSnapshot?
 
   // Replace / Add token form state
   @Published public var isReplacingToken: Bool = false
@@ -64,7 +65,7 @@ public final class GitHubSettingsViewModel: ObservableObject {
 
   public init(
     tokenStore: any TokenStore,
-    configStore: ConfigStore? = nil,
+    configStore: ConfigStore,
     snapshot: WidgetSnapshot? = nil,
     snapshotPublisher: AnyPublisher<WidgetSnapshot?, Never>? = nil,
     client: GitHubGraphQLClient = GitHubGraphQLClient(),
@@ -97,7 +98,7 @@ public final class GitHubSettingsViewModel: ObservableObject {
 
   public convenience init(
     tokenStore: any TokenStore,
-    configStore: ConfigStore?,
+    configStore: ConfigStore,
     scheduler: RefreshScheduler?,
     client: GitHubGraphQLClient = GitHubGraphQLClient(),
     tokenValidator: TokenValidator? = nil,
@@ -121,8 +122,8 @@ public final class GitHubSettingsViewModel: ObservableObject {
         self.hasToken = true
         self.maskedToken = Self.maskToken(token)
 
-        // Read cached metadata if available
-        let defaults = configStore?.userDefaults ?? .standard
+        // Read cached metadata from ConfigStore UserDefaults
+        let defaults = configStore.userDefaults
         self.account = defaults.string(forKey: CacheKeys.cachedAccount)
         let expTimestamp = defaults.double(forKey: CacheKeys.cachedExpiration)
         if expTimestamp > 0 {
@@ -150,6 +151,7 @@ public final class GitHubSettingsViewModel: ObservableObject {
   /// Updates token status and metadata from a newly published widget snapshot.
   public func updateFromSnapshot(_ snapshot: WidgetSnapshot?) {
     guard let snapshot else { return }
+    self.latestSnapshot = snapshot
 
     if let rl = snapshot.rateLimit {
       self.rateLimit = rl
@@ -211,8 +213,8 @@ public final class GitHubSettingsViewModel: ObservableObject {
       // Save valid token to Keychain
       try tokenStore.save(token: trimmed)
 
-      // Update cached metadata
-      let defaults = configStore?.userDefaults ?? .standard
+      // Update cached metadata in ConfigStore UserDefaults
+      let defaults = configStore.userDefaults
       defaults.set(result.viewer, forKey: CacheKeys.cachedAccount)
       if let exp = result.expiresAt {
         defaults.set(exp.timeIntervalSince1970, forKey: CacheKeys.cachedExpiration)
@@ -241,6 +243,13 @@ public final class GitHubSettingsViewModel: ObservableObject {
         } else {
           validationError = "Invalid token: \(detail)"
         }
+      case .rateLimited(let resetAt):
+        if let resetAt {
+          let timeStr = DateFormatter.localizedString(from: resetAt, dateStyle: .none, timeStyle: .short)
+          validationError = "GitHub API rate limit exceeded. Resets at \(timeStr)."
+        } else {
+          validationError = "GitHub API rate limit exceeded. Please try again later."
+        }
       case .offline(let detail):
         validationError = "Unable to validate token: \(detail)"
       case .serverError(_, let detail):
@@ -256,9 +265,14 @@ public final class GitHubSettingsViewModel: ObservableObject {
   /// Removes the stored token from Keychain and clears cached metadata.
   public func removeToken() {
     validationError = nil
-    try? tokenStore.delete()
+    do {
+      try tokenStore.delete()
+    } catch {
+      validationError = "Failed to remove token: \(error.localizedDescription)"
+      return
+    }
 
-    let defaults = configStore?.userDefaults ?? .standard
+    let defaults = configStore.userDefaults
     defaults.removeObject(forKey: CacheKeys.cachedAccount)
     defaults.removeObject(forKey: CacheKeys.cachedExpiration)
 
@@ -288,12 +302,16 @@ public final class GitHubSettingsViewModel: ObservableObject {
   // MARK: - Display & Formatting Helpers
 
   public var watchedReposCount: Int {
-    configStore?.load().watchedRepos.count ?? 0
+    configStore.load().watchedRepos.count
   }
 
   public var repositoryAccessText: String {
-    let count = watchedReposCount
-    return count == 1 ? "1 selected repository" : "\(count) selected repositories"
+    guard let snapshot = latestSnapshot, !snapshot.repositoryAccess.isEmpty else {
+      return "—"
+    }
+    let readable = snapshot.repositoryAccess.filter(\.hasAccess).count
+    let total = snapshot.repositoryAccess.count
+    return "\(readable) of \(total) watched repos readable"
   }
 
   public var expirationText: String {
@@ -305,7 +323,7 @@ public final class GitHubSettingsViewModel: ObservableObject {
 
   public var apiBudgetText: String {
     guard let rateLimit else {
-      return "5,000 of 5,000 points left"
+      return "—"
     }
     return Self.formatAPIBudget(remaining: rateLimit.remaining, limit: rateLimit.limit)
   }
