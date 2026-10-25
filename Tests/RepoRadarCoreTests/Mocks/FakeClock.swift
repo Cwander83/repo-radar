@@ -34,16 +34,41 @@ public final class FakeClock: ClockProtocol, @unchecked Sendable {
     return _lastSleepRequestedDuration
   }
 
+  /// Suspends until `advance(by:)` passes the deadline. Like `Task.sleep`, a cancelled sleeper
+  /// is removed from `scheduled` and resumed with `CancellationError`.
   public func sleep(seconds: TimeInterval) async throws {
-    try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-      lock.lock()
-      _sleepCallCount += 1
-      _lastSleepRequestedDuration = seconds
-      let deadline = _now.addingTimeInterval(seconds)
-      scheduled.append((id: UUID(), deadline: deadline, continuation: continuation))
-      scheduled.sort { $0.deadline < $1.deadline }
-      lock.unlock()
+    let id = UUID()
+    try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+        lock.lock()
+        // The cancelled flag is set before `onCancel` runs, so checking it under the lock
+        // covers cancellation that lands before this entry is appended.
+        if Task.isCancelled {
+          lock.unlock()
+          continuation.resume(throwing: CancellationError())
+          return
+        }
+        _sleepCallCount += 1
+        _lastSleepRequestedDuration = seconds
+        let deadline = _now.addingTimeInterval(seconds)
+        scheduled.append((id: id, deadline: deadline, continuation: continuation))
+        scheduled.sort { $0.deadline < $1.deadline }
+        lock.unlock()
+      }
+    } onCancel: {
+      cancelSleep(id: id)
     }
+  }
+
+  private func cancelSleep(id: UUID) {
+    lock.lock()
+    guard let index = scheduled.firstIndex(where: { $0.id == id }) else {
+      lock.unlock()
+      return
+    }
+    let entry = scheduled.remove(at: index)
+    lock.unlock()
+    entry.continuation.resume(throwing: CancellationError())
   }
 
   public func advance(by seconds: TimeInterval) {
@@ -71,6 +96,17 @@ public final class FakeClock: ClockProtocol, @unchecked Sendable {
     let start = Date()
     while Date().timeIntervalSince(start) < timeoutSeconds {
       if sleepCallCount >= count {
+        return
+      }
+      try await Task.sleep(nanoseconds: 10_000_000)
+    }
+    throw TimeoutError()
+  }
+
+  public func waitForPendingSleepCount(_ count: Int, timeoutSeconds: TimeInterval = 2.0) async throws {
+    let start = Date()
+    while Date().timeIntervalSince(start) < timeoutSeconds {
+      if pendingSleepCount() == count {
         return
       }
       try await Task.sleep(nanoseconds: 10_000_000)

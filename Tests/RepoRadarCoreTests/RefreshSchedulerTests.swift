@@ -327,6 +327,101 @@ struct RefreshSchedulerTests {
     #expect(scheduler.computeDelay(after: scheduler.lastError) == 240)
   }
 
+  @Test("Offline retries start faster than a poll and cap at the poll interval (CHR-97)")
+  func testOfflineBackoffCapsAtPollInterval() async throws {
+    let ctx = try TestContext(pollInterval: .fiveMinutes) // 300s
+    defer { ctx.cleanup() }
+
+    MockURLProtocol.registerHandler(id: ctx.mockID) { _ in
+      throw URLError(.notConnectedToInternet)
+    }
+
+    let fakeClock = FakeClock()
+    let scheduler = RefreshScheduler(service: ctx.service, clock: fakeClock)
+
+    // Intended fast recovery: early retries come sooner than the 300s poll,
+    // then every retry is capped at the poll interval, never slower.
+    let expected: [TimeInterval] = [60, 120, 240, 300, 300, 300, 300, 300]
+    var delays: [TimeInterval] = []
+    for _ in expected {
+      do { _ = try await scheduler.performRefresh() } catch {}
+      delays.append(scheduler.computeDelay(after: scheduler.lastError))
+    }
+    #expect(delays == expected)
+    #expect(scheduler.consecutiveOfflineCount == expected.count)
+  }
+
+  @Test("FakeClock removes and cancels a sleeper when its task is cancelled")
+  func testFakeClockCancelledSleeperIsRemoved() async throws {
+    let fakeClock = FakeClock()
+    let sleeper = Task { try await fakeClock.sleep(seconds: 300) }
+
+    try await fakeClock.waitForSleepCalls(count: 1)
+    #expect(fakeClock.pendingSleepCount() == 1)
+
+    sleeper.cancel()
+    let result = await sleeper.result
+    switch result {
+    case .success:
+      Issue.record("Expected CancellationError")
+    case .failure(let error):
+      #expect(error is CancellationError)
+    }
+    #expect(fakeClock.pendingSleepCount() == 0)
+  }
+
+  @Test("FakeClock rejects a sleep that starts on an already-cancelled task")
+  func testFakeClockSleepOnCancelledTask() async throws {
+    let fakeClock = FakeClock()
+    let sleeper = Task {
+      withUnsafeCurrentTask { $0?.cancel() }
+      try await fakeClock.sleep(seconds: 300)
+    }
+
+    let result = await sleeper.result
+    switch result {
+    case .success:
+      Issue.record("Expected CancellationError")
+    case .failure(let error):
+      #expect(error is CancellationError)
+    }
+    #expect(fakeClock.pendingSleepCount() == 0)
+    #expect(fakeClock.sleepCallCount == 0)
+  }
+
+  @Test("stop() and restartTimer() leave no orphaned sleepers")
+  func testStopAndRestartLeaveNoOrphanedSleepers() async throws {
+    let ctx = try TestContext(pollInterval: .fiveMinutes)
+    defer { ctx.cleanup() }
+
+    let fixtureData = try loadRecordedPublicFixture()
+    MockURLProtocol.registerHandler(id: ctx.mockID) { _ in
+      let response = HTTPURLResponse(
+        url: URL(string: "https://api.github.com/graphql")!,
+        statusCode: 200,
+        httpVersion: nil,
+        headerFields: ["Content-Type": "application/json"]
+      )!
+      return (response, fixtureData)
+    }
+
+    let fakeClock = FakeClock()
+    let scheduler = RefreshScheduler(service: ctx.service, clock: fakeClock)
+
+    scheduler.start()
+    try await fakeClock.waitForSleepCalls(count: 1)
+    #expect(fakeClock.pendingSleepCount() == 1)
+
+    // restartTimer() cancels the old loop; only the new loop's sleep stays pending.
+    scheduler.restartTimer()
+    try await fakeClock.waitForSleepCalls(count: 2)
+    try await fakeClock.waitForPendingSleepCount(1)
+
+    // stop() cancels the loop; its sleeper is removed, not leaked.
+    scheduler.stop()
+    try await fakeClock.waitForPendingSleepCount(0)
+  }
+
   @Test("refreshNow does not restart periodic timer after stop")
   func testRefreshNowDoesNotRestartAfterStop() async throws {
     let ctx = try TestContext(pollInterval: .fiveMinutes)
