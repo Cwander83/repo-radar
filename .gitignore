@@ -39,9 +39,7 @@ credentials.json
 # Claude Code local settings
 .claude/settings.local.json
 
-# Local-only: agent instructions, planning docs, tool state
-AGENTS.md
-CLAUDE.md
+# Local-only: planning docs, tool state
 docs/
 .claude/
 .mcp.json
