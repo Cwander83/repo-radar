@@ -208,10 +208,12 @@ private struct MetricTile: View {
       Text("\(count)")
         .font(.system(size: 16, weight: .bold))
         .foregroundStyle(isAlert ? color : .primary)
+        .widgetAccentable(isAlert)
 
       Text(title)
         .font(.system(size: 9.5, weight: .medium))
         .foregroundStyle(isAlert ? color : .secondary)
+        .widgetAccentable(isAlert)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(.horizontal, 7)
@@ -219,6 +221,11 @@ private struct MetricTile: View {
     .background(
       RoundedRectangle(cornerRadius: 6, style: .continuous)
         .fill(isAlert ? color.opacity(0.14) : Color.primary.opacity(0.05))
+    )
+    .overlay(
+      RoundedRectangle(cornerRadius: 6, style: .continuous)
+        .stroke(isAlert ? color.opacity(0.3) : Color.clear, lineWidth: 1)
+        .widgetAccentable(isAlert)
     )
   }
 }
@@ -234,16 +241,23 @@ private struct MetricPill: View {
       Text("\(count)")
         .font(.system(size: 10.5, weight: .bold))
         .foregroundStyle(isAlert ? color : .primary)
+        .widgetAccentable(isAlert)
 
       Text(label)
         .font(.system(size: 9, weight: .medium))
         .foregroundStyle(isAlert ? color : .secondary)
+        .widgetAccentable(isAlert)
     }
     .padding(.horizontal, 5)
     .padding(.vertical, 2)
     .background(
       RoundedRectangle(cornerRadius: 4.5, style: .continuous)
         .fill(isAlert ? color.opacity(0.14) : Color.primary.opacity(0.05))
+    )
+    .overlay(
+      RoundedRectangle(cornerRadius: 4.5, style: .continuous)
+        .stroke(isAlert ? color.opacity(0.3) : Color.clear, lineWidth: 0.75)
+        .widgetAccentable(isAlert)
     )
   }
 }
@@ -272,6 +286,7 @@ private struct WidgetRowView: View {
         .font(.system(size: 11, weight: .bold))
         .foregroundStyle(iconColor)
         .frame(width: 14, height: 14)
+        .widgetAccentable()
 
       VStack(alignment: .leading, spacing: 1) {
         Text(title)
@@ -303,6 +318,7 @@ private struct WidgetSectionHeader: View {
         .font(.system(size: 10, weight: .bold))
         .foregroundStyle(iconColor)
         .frame(width: 12, height: 12)
+        .widgetAccentable()
 
       Text(title)
         .font(.system(size: 9.5, weight: .semibold))
@@ -466,6 +482,7 @@ private struct SmallDataView: View {
         Image(systemName: "radar")
           .font(.system(size: 12, weight: .semibold))
           .foregroundStyle(Color.indigo)
+          .widgetAccentable()
         Text(headerTitle)
           .font(.system(size: 12.5, weight: .semibold))
           .foregroundStyle(isDimmed ? .secondary : .primary)
@@ -512,10 +529,16 @@ private struct SmallDataView: View {
       // Footer
       HStack {
         if let footerText {
-          Text(footerText)
-            .font(.system(size: 8.5))
-            .foregroundStyle(.orange)
-            .lineLimit(1)
+          HStack(spacing: 3) {
+            Image(systemName: "exclamationmark.triangle.fill")
+              .font(.system(size: 8))
+              .foregroundStyle(.orange)
+              .widgetAccentable()
+            Text(footerText)
+              .font(.system(size: 8.5))
+              .foregroundStyle(.orange)
+              .lineLimit(1)
+          }
         } else {
           Text("Updated \(timeString(from: snapshot.updatedAt))")
             .font(.system(size: 9))
@@ -566,6 +589,7 @@ private struct SmallSectionListView: View {
         Image(systemName: section.iconName)
           .font(.system(size: 11, weight: .bold))
           .foregroundStyle(sectionColor(section))
+          .widgetAccentable()
 
         Text(headerTitle)
           .font(.system(size: 11.5, weight: .semibold))
@@ -589,6 +613,7 @@ private struct SmallSectionListView: View {
           Image(systemName: "checkmark.seal.fill")
             .font(.system(size: 22))
             .foregroundStyle(.green)
+            .widgetAccentable()
 
           Text(emptyTitle)
             .font(.system(size: 13, weight: .semibold))
@@ -619,10 +644,16 @@ private struct SmallSectionListView: View {
       // Footer
       HStack {
         if let footerText {
-          Text(footerText)
-            .font(.system(size: 8.5))
-            .foregroundStyle(.orange)
-            .lineLimit(1)
+          HStack(spacing: 3) {
+            Image(systemName: "exclamationmark.triangle.fill")
+              .font(.system(size: 8))
+              .foregroundStyle(.orange)
+              .widgetAccentable()
+            Text(footerText)
+              .font(.system(size: 8.5))
+              .foregroundStyle(.orange)
+              .lineLimit(1)
+          }
         } else {
           Text("Updated \(timeString(from: snapshot.updatedAt))")
             .font(.system(size: 9))
@@ -673,6 +704,7 @@ private struct SmallAllClearView: View {
         Image(systemName: "radar")
           .font(.system(size: 12, weight: .semibold))
           .foregroundStyle(Color.indigo)
+          .widgetAccentable()
         Text(headerTitle)
           .font(.system(size: 12.5, weight: .semibold))
           .lineLimit(1)
@@ -685,6 +717,7 @@ private struct SmallAllClearView: View {
         Image(systemName: "checkmark.seal.fill")
           .font(.system(size: 24))
           .foregroundStyle(.green)
+          .widgetAccentable()
 
         Text("All Clear")
           .font(.system(size: 13.5, weight: .semibold))
@@ -720,6 +753,7 @@ private struct SmallEmptyCardView: View {
         Image(systemName: icon)
           .font(.system(size: 12, weight: .semibold))
           .foregroundStyle(iconColor)
+          .widgetAccentable()
         Text(title)
           .font(.system(size: 12.5, weight: .semibold))
           .foregroundStyle(iconColor == .red ? .red : .primary)
@@ -866,6 +900,7 @@ private struct MediumDataView: View {
         Image(systemName: section.iconName)
           .font(.system(size: 13, weight: .semibold))
           .foregroundStyle(sectionColor(section))
+          .widgetAccentable()
         Text(headerTitle)
           .font(.system(size: 13, weight: .semibold))
           .foregroundStyle(isDimmed ? .secondary : .primary)
@@ -935,10 +970,16 @@ private struct MediumDataView: View {
         Spacer(minLength: 0)
 
         if let footerText {
-          Text(footerText)
-            .font(.system(size: 9))
-            .foregroundStyle(.orange)
-            .lineLimit(1)
+          HStack(spacing: 3) {
+            Image(systemName: "exclamationmark.triangle.fill")
+              .font(.system(size: 8.5))
+              .foregroundStyle(.orange)
+              .widgetAccentable()
+            Text(footerText)
+              .font(.system(size: 9))
+              .foregroundStyle(.orange)
+              .lineLimit(1)
+          }
         }
       }
     }
@@ -990,6 +1031,7 @@ private struct MediumAllClearView: View {
         Image(systemName: section.iconName)
           .font(.system(size: 13, weight: .semibold))
           .foregroundStyle(sectionColor(section))
+          .widgetAccentable()
         Text(headerTitle)
           .font(.system(size: 13, weight: .semibold))
           .lineLimit(1)
@@ -1021,6 +1063,7 @@ private struct MediumAllClearView: View {
       Image(systemName: "checkmark.seal.fill")
         .font(.system(size: 30))
         .foregroundStyle(.green)
+        .widgetAccentable()
 
       VStack(alignment: .leading, spacing: 2) {
         Text(clearTitle)
@@ -1070,6 +1113,7 @@ private struct MediumEmptyCardView: View {
         Image(systemName: "radar")
           .font(.system(size: 13, weight: .semibold))
           .foregroundStyle(Color.indigo)
+          .widgetAccentable()
         Text("Repo Radar")
           .font(.system(size: 13, weight: .semibold))
         Spacer()
@@ -1082,6 +1126,7 @@ private struct MediumEmptyCardView: View {
           .font(.system(size: 26))
           .foregroundStyle(iconColor)
           .frame(width: 32)
+          .widgetAccentable()
 
         VStack(alignment: .leading, spacing: 3) {
           Text(title)
@@ -1245,6 +1290,7 @@ private struct LargeDataView: View {
           Image(systemName: section.iconName)
             .font(.system(size: 14, weight: .semibold))
             .foregroundStyle(sectionColor(section))
+            .widgetAccentable()
           Text(headerTitle)
             .font(.system(size: 14, weight: .semibold))
             .foregroundStyle(isDimmed ? .secondary : .primary)
@@ -1264,6 +1310,7 @@ private struct LargeDataView: View {
           Image(systemName: "exclamationmark.circle.fill")
             .font(.system(size: 11))
             .foregroundStyle(.orange)
+            .widgetAccentable()
           Text(footerText)
             .font(.system(size: 10, weight: .medium))
             .foregroundStyle(.orange)
@@ -1437,6 +1484,7 @@ private struct LargeAllClearView: View {
           Image(systemName: section.iconName)
             .font(.system(size: 14, weight: .semibold))
             .foregroundStyle(sectionColor(section))
+            .widgetAccentable()
           Text(headerTitle)
             .font(.system(size: 14, weight: .semibold))
             .lineLimit(1)
@@ -1502,6 +1550,7 @@ private struct LargeAllClearView: View {
       Image(systemName: "checkmark.seal.fill")
         .font(.system(size: 38))
         .foregroundStyle(.green)
+        .widgetAccentable()
 
       Text(clearTitle)
         .font(.system(size: 16, weight: .semibold))
@@ -1549,6 +1598,7 @@ private struct LargeEmptyCardView: View {
         Image(systemName: "radar")
           .font(.system(size: 14, weight: .semibold))
           .foregroundStyle(Color.indigo)
+          .widgetAccentable()
         Text("Repo Radar")
           .font(.system(size: 14, weight: .semibold))
         Spacer()
@@ -1565,6 +1615,7 @@ private struct LargeEmptyCardView: View {
           Image(systemName: icon)
             .font(.system(size: 24, weight: .semibold))
             .foregroundStyle(iconColor)
+            .widgetAccentable()
         }
 
         Text(title)
@@ -1773,4 +1824,36 @@ struct RepoRadarWidget: Widget {
   RepoRadarWidget()
 } timeline: {
   RepoRadarWidgetEntry.previewAllClear
+}
+
+// MARK: - Previews: Rendering Modes & Appearances
+
+#Preview("Accented - Medium") {
+  RepoRadarWidgetEntryView(entry: .previewData)
+    .frame(width: 300, height: 150)
+    .environment(\.widgetRenderingMode, .accented)
+}
+
+#Preview("Vibrant - Small") {
+  RepoRadarWidgetEntryView(entry: .previewData)
+    .frame(width: 150, height: 150)
+    .environment(\.widgetRenderingMode, .vibrant)
+}
+
+#Preview("Accented - Large") {
+  RepoRadarWidgetEntryView(entry: .previewData)
+    .frame(width: 300, height: 300)
+    .environment(\.widgetRenderingMode, .accented)
+}
+
+#Preview("Dark - Medium") {
+  RepoRadarWidgetEntryView(entry: .previewData)
+    .frame(width: 300, height: 150)
+    .preferredColorScheme(.dark)
+}
+
+#Preview("Light - Medium") {
+  RepoRadarWidgetEntryView(entry: .previewData)
+    .frame(width: 300, height: 150)
+    .preferredColorScheme(.light)
 }
