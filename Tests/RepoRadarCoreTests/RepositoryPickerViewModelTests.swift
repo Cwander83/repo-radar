@@ -313,9 +313,124 @@ struct RepositoryPickerViewModelTests {
     #expect(savedRepos == ["owner/b", "owner/a", "owner/c"])
   }
 
+  @Test("Matches case-insensitively across API results and selections")
+  @MainActor
+  func testCaseInsensitiveMatching() {
+    let (defaults, suite) = makeTestDefaults()
+    defer { defaults.removePersistentDomain(forName: suite) }
+
+    let configStore = ConfigStore(userDefaults: defaults)
+    configStore.save(sanitizing: RepoRadarConfig(watchedRepos: ["cwander83/repo-radar"]))
+    let tokenStore = InMemoryTokenStore(initialToken: "token")
+
+    let vm = RepositoryPickerViewModel(configStore: configStore, tokenStore: tokenStore)
+    vm.allRepositories = [
+      ViewerRepositoryNode(nameWithOwner: "Cwander83/repo-radar", isPrivate: false, isArchived: false)
+    ]
+
+    #expect(vm.isSelected("Cwander83/repo-radar") == true)
+    #expect(vm.isSelected("cwander83/repo-radar") == true)
+    #expect(vm.selectedCount == 1)
+
+    // Toggling with uppercase unselects it
+    vm.toggleSelection("CWANDER83/REPO-RADAR")
+    #expect(vm.selectedCount == 0)
+    #expect(vm.isSelected("Cwander83/repo-radar") == false)
+
+    // Toggling adds it back
+    vm.toggleSelection("Cwander83/repo-radar")
+    #expect(vm.selectedCount == 1)
+    #expect(vm.isSelected("cwander83/repo-radar") == true)
+  }
+
+  @Test("Manual repositories not in API listing are visible and counted")
+  @MainActor
+  func testManualRepositoriesVisibleAndCounted() {
+    let (defaults, suite) = makeTestDefaults()
+    defer { defaults.removePersistentDomain(forName: suite) }
+
+    let configStore = ConfigStore(userDefaults: defaults)
+    configStore.save(
+      sanitizing: RepoRadarConfig(
+        watchedRepos: ["Cwander83/repo-radar", "external-org/manual-repo"]
+      )
+    )
+    let tokenStore = InMemoryTokenStore(initialToken: "token")
+
+    let vm = RepositoryPickerViewModel(configStore: configStore, tokenStore: tokenStore)
+    vm.allRepositories = [
+      ViewerRepositoryNode(nameWithOwner: "Cwander83/repo-radar", isPrivate: false, isArchived: false)
+    ]
+
+    #expect(vm.manualRepositories == ["external-org/manual-repo"])
+    #expect(vm.visibleManualRepositories == ["external-org/manual-repo"])
+    #expect(vm.visibleRepositories.count == 1)
+    #expect(vm.selectedCount == 2)
+    #expect(vm.selectionCounterText == "2 of 25 selected")
+
+    // Filter query hides it if non-matching
+    vm.searchQuery = "nonexistent"
+    #expect(vm.visibleManualRepositories.isEmpty == true)
+    #expect(vm.visibleRepositories.isEmpty == true)
+
+    // Filter query shows it when matching
+    vm.searchQuery = "manual"
+    #expect(vm.visibleManualRepositories == ["external-org/manual-repo"])
+    #expect(vm.visibleRepositories.isEmpty == true)
+  }
+
+  @Test("Select all keeps manual repositories and fills remaining slots with recent repos")
+  @MainActor
+  func testSelectAllKeepsManualRepositories() {
+    let (defaults, suite) = makeTestDefaults()
+    defer { defaults.removePersistentDomain(forName: suite) }
+
+    let configStore = ConfigStore(userDefaults: defaults)
+    configStore.save(
+      sanitizing: RepoRadarConfig(
+        watchedRepos: ["external-org/manual-1", "external-org/manual-2"]
+      )
+    )
+    let tokenStore = InMemoryTokenStore(initialToken: "token")
+
+    var repos: [ViewerRepositoryNode] = []
+    repos.reserveCapacity(30)
+    for i in 1...30 {
+      let offset = TimeInterval(-i * 3600)
+      let pushed = Date().addingTimeInterval(offset)
+      repos.append(
+        ViewerRepositoryNode(
+          nameWithOwner: "owner/repo-\(i)",
+          isPrivate: false,
+          isArchived: false,
+          pushedAt: pushed,
+          defaultBranchRef: RefBranch(name: "main")
+        )
+      )
+    }
+
+    let vm = RepositoryPickerViewModel(configStore: configStore, tokenStore: tokenStore)
+    vm.allRepositories = repos
+
+    #expect(vm.manualRepositories.count == 2)
+
+    vm.selectAll()
+
+    #expect(vm.selectedCount == 25)
+    #expect(vm.isAtCap == true)
+    // Both manual repos are kept
+    #expect(vm.isSelected("external-org/manual-1") == true)
+    #expect(vm.isSelected("external-org/manual-2") == true)
+    // Exactly 23 fetched repos filled the remaining slots
+    for i in 1...23 {
+      #expect(vm.isSelected("owner/repo-\(i)") == true)
+    }
+    #expect(vm.isSelected("owner/repo-24") == false)
+  }
+
   @Test("Integration: makePickerViewModel in RepositoriesSettingsViewModel saves and triggers refresh")
   @MainActor
-  func testIntegrationWithRepositoriesSettingsViewModel() {
+  func testIntegrationWithRepositoriesSettingsViewModel() throws {
     let (defaults, suite) = makeTestDefaults()
     defer { defaults.removePersistentDomain(forName: suite) }
 
@@ -326,6 +441,10 @@ struct RepositoryPickerViewModelTests {
     var refreshCount = 0
     var configChangedCount = 0
 
+    // Without tokenStore, makePickerViewModel returns nil (no silent fallback)
+    let vmNoToken = RepositoriesSettingsViewModel(configStore: configStore, tokenStore: nil)
+    #expect(vmNoToken.makePickerViewModel() == nil)
+
     let parentVM = RepositoriesSettingsViewModel(
       configStore: configStore,
       tokenStore: tokenStore,
@@ -333,12 +452,13 @@ struct RepositoryPickerViewModelTests {
       onRefreshRequest: { refreshCount += 1 }
     )
 
-    let pickerVM = parentVM.makePickerViewModel(fetcher: {
+    let maybePicker = parentVM.makePickerViewModel(fetcher: {
       [
         ViewerRepositoryNode(nameWithOwner: "owner/repo-1", isPrivate: false, isArchived: false),
         ViewerRepositoryNode(nameWithOwner: "owner/repo-2", isPrivate: false, isArchived: false)
       ]
     })
+    let pickerVM = try #require(maybePicker)
 
     #expect(pickerVM.isSelected("owner/repo-1") == true)
     #expect(pickerVM.isSelected("owner/repo-2") == false)

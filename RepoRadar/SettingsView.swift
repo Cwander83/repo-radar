@@ -326,7 +326,9 @@ public struct RepositoriesSettingsView: View {
       viewModel.updateAccess(from: snapshot)
     }
     .sheet(isPresented: $isPickerPresented) {
-      RepositoryPickerSheet(viewModel: viewModel.makePickerViewModel())
+      if let pickerVM = viewModel.makePickerViewModel() {
+        RepositoryPickerSheet(viewModel: pickerVM)
+      }
     }
   }
 
@@ -845,7 +847,7 @@ public struct RepositoryPickerSheet: View {
           .font(.system(size: 12))
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-      } else if viewModel.isZeroRepos {
+      } else if viewModel.isZeroRepos && viewModel.manualRepositories.isEmpty {
         VStack(spacing: 10) {
           Image(systemName: "lock.shield")
             .font(.system(size: 28))
@@ -862,7 +864,7 @@ public struct RepositoryPickerSheet: View {
             .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-      } else if viewModel.visibleRepositories.isEmpty {
+      } else if viewModel.visibleRepositories.isEmpty && viewModel.visibleManualRepositories.isEmpty {
         VStack(spacing: 8) {
           Text("No matching repositories")
             .font(.system(size: 13, weight: .medium))
@@ -876,16 +878,74 @@ public struct RepositoryPickerSheet: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
       } else {
         ScrollView {
-          LazyVStack(spacing: 0) {
-            ForEach(viewModel.visibleRepositories) { repo in
-              repositoryPickerRow(repo)
-              Divider()
-                .padding(.leading, 36)
+          LazyVStack(alignment: .leading, spacing: 0) {
+            if !viewModel.visibleManualRepositories.isEmpty {
+              Text("ADDED MANUALLY")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 20)
+                .padding(.top, 10)
+                .padding(.bottom, 4)
+
+              ForEach(viewModel.visibleManualRepositories, id: \.self) { repo in
+                manualRepositoryPickerRow(repo)
+                Divider()
+                  .padding(.leading, 36)
+              }
+            }
+
+            if !viewModel.visibleRepositories.isEmpty {
+              if !viewModel.visibleManualRepositories.isEmpty {
+                Text("REPOSITORIES")
+                  .font(.system(size: 11, weight: .semibold))
+                  .foregroundStyle(.secondary)
+                  .padding(.horizontal, 20)
+                  .padding(.top, 14)
+                  .padding(.bottom, 4)
+              }
+
+              ForEach(viewModel.visibleRepositories) { repo in
+                repositoryPickerRow(repo)
+                Divider()
+                  .padding(.leading, 36)
+              }
             }
           }
         }
       }
     }
+  }
+
+  private func manualRepositoryPickerRow(_ repo: String) -> some View {
+    let isSelected = viewModel.isSelected(repo)
+    let canToggle = viewModel.canToggle(repo)
+
+    return Button {
+      viewModel.toggleSelection(repo)
+    } label: {
+      HStack(spacing: 10) {
+        Image(systemName: isSelected ? "checkmark.square.fill" : "square")
+          .font(.system(size: 14))
+          .foregroundStyle(isSelected ? Color.accentColor : (canToggle ? Color.secondary : Color.secondary.opacity(0.4)))
+
+        repoNameFormatted(repo)
+
+        Text("Manual")
+          .font(.system(size: 9, weight: .medium))
+          .foregroundStyle(.secondary)
+          .padding(.horizontal, 4)
+          .padding(.vertical, 1)
+          .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 3))
+
+        Spacer()
+      }
+      .padding(.horizontal, 20)
+      .padding(.vertical, 7)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .disabled(!canToggle)
+    .opacity(canToggle ? 1.0 : 0.6)
   }
 
   private func repositoryPickerRow(_ repo: ViewerRepositoryNode) -> some View {

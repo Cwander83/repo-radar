@@ -183,12 +183,14 @@ public final class RepositoriesSettingsViewModel: ObservableObject {
   }
 
   /// Creates a configured RepositoryPickerViewModel wired to update watched repositories on save.
+  /// Returns nil if no tokenStore is configured.
   public func makePickerViewModel(
     fetcher: RepositoryPickerViewModel.RepositoriesFetcher? = nil
-  ) -> RepositoryPickerViewModel {
-    RepositoryPickerViewModel(
+  ) -> RepositoryPickerViewModel? {
+    guard let tokenStore else { return nil }
+    return RepositoryPickerViewModel(
       configStore: configStore,
-      tokenStore: tokenStore ?? InMemoryTokenStore(),
+      tokenStore: tokenStore,
       client: client,
       fetcher: fetcher,
       onSave: { [weak self] selected in

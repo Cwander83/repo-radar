@@ -136,12 +136,8 @@ public final class GitHubGraphQLClient: Sendable {
       throw RepoRadarError.decodingError(detail: error.localizedDescription)
     }
 
-    if pageResponse.data == nil {
-      try handleGraphQLErrors(pageResponse.errors, httpResponse: httpResponse)
-      throw RepoRadarError.decodingError(detail: "Empty GraphQL response data.")
-    }
-
     guard let responseData = pageResponse.data else {
+      try handleGraphQLErrors(pageResponse.errors, httpResponse: httpResponse)
       throw RepoRadarError.decodingError(detail: "Empty GraphQL response data.")
     }
 
@@ -163,7 +159,7 @@ public final class GitHubGraphQLClient: Sendable {
       throw RepoRadarError.decodingError(detail: error.localizedDescription)
     }
 
-    if queryResponse.data == nil {
+    guard queryResponse.data != nil else {
       try handleGraphQLErrors(queryResponse.errors, httpResponse: httpResponse)
       throw RepoRadarError.decodingError(detail: "Empty GraphQL response data.")
     }

@@ -45,7 +45,7 @@ public final class RepositoryPickerViewModel: ObservableObject {
 
   /// Number of currently selected repositories.
   public var selectedCount: Int {
-    selectedRepos.count
+    Set(selectedRepos.map { $0.lowercased() }).count
   }
 
   /// Whether the selection has reached the 25-repository cap.
@@ -68,14 +68,43 @@ public final class RepositoryPickerViewModel: ObservableObject {
     "\(selectedCount) of \(maxSelection) selected"
   }
 
-  /// Checks whether a repository is currently selected.
+  /// Checks whether a repository is currently selected, case-insensitively.
   public func isSelected(_ repo: String) -> Bool {
-    selectedRepos.contains(repo)
+    let lower = repo.lowercased()
+    return selectedRepos.contains(where: { $0.lowercased() == lower })
   }
 
   /// Whether a repository checkbox can be clicked (true if already selected or below cap).
   public func canToggle(_ repo: String) -> Bool {
     isSelected(repo) || canSelectMore
+  }
+
+  /// Watched repositories not returned by the token listing (e.g. public repos added manually).
+  public var manualRepositories: [String] {
+    let fetchedKeys = Set(allRepositories.map { $0.nameWithOwner.lowercased() })
+    var manual: [String] = []
+    for repo in initialWatchedRepos where !fetchedKeys.contains(repo.lowercased()) {
+      if !manual.contains(where: { $0.lowercased() == repo.lowercased() }) {
+        manual.append(repo)
+      }
+    }
+    for repo in selectedRepos where !fetchedKeys.contains(repo.lowercased()) {
+      if !manual.contains(where: { $0.lowercased() == repo.lowercased() }) {
+        manual.append(repo)
+      }
+    }
+    return manual
+  }
+
+  /// Visible manual repositories matching search query.
+  public var visibleManualRepositories: [String] {
+    let trimmedQuery = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+    return manualRepositories.filter { repo in
+      if !trimmedQuery.isEmpty {
+        return repo.localizedCaseInsensitiveContains(trimmedQuery)
+      }
+      return true
+    }
   }
 
   /// Filtered repositories matching search query and archived toggle.
@@ -130,20 +159,36 @@ public final class RepositoryPickerViewModel: ObservableObject {
     isLoading = false
   }
 
-  /// Toggles selection of a repository, enforcing the 25-repo cap.
+  /// Toggles selection of a repository, enforcing the 25-repo cap case-insensitively.
   public func toggleSelection(_ repo: String) {
-    if selectedRepos.contains(repo) {
-      selectedRepos.remove(repo)
+    let canonical = repo.lowercased()
+    if let existing = selectedRepos.first(where: { $0.lowercased() == canonical }) {
+      selectedRepos.remove(existing)
     } else if canSelectMore {
       selectedRepos.insert(repo)
     }
   }
 
-  /// Selects the 25 most recently pushed repositories from the visible list.
+  /// Selects repositories up to the 25 cap, keeping visible manual repos and filling remaining slots with recently pushed repos.
   public func selectAll() {
-    let candidates = visibleRepositories
-    let top25 = candidates.prefix(maxSelection)
-    self.selectedRepos = Set(top25.map(\.nameWithOwner))
+    var newSelected: [String] = []
+
+    // 1. Keep visible manual repositories first
+    for repo in visibleManualRepositories {
+      if newSelected.count == maxSelection { break }
+      newSelected.append(repo)
+    }
+
+    // 2. Fill remaining slots with visible repositories in order of recent pushes
+    for repo in visibleRepositories {
+      if newSelected.count == maxSelection { break }
+      let canonical = repo.nameWithOwner.lowercased()
+      if !newSelected.contains(where: { $0.lowercased() == canonical }) {
+        newSelected.append(repo.nameWithOwner)
+      }
+    }
+
+    self.selectedRepos = Set(newSelected)
   }
 
   /// Deselects all repositories.
@@ -156,17 +201,21 @@ public final class RepositoryPickerViewModel: ObservableObject {
     var ordered: [String] = []
 
     // 1. Existing watched repos that remain selected
-    for repo in initialWatchedRepos where selectedRepos.contains(repo) {
-      ordered.append(repo)
+    for repo in initialWatchedRepos where isSelected(repo) {
+      if let official = allRepositories.first(where: { $0.nameWithOwner.lowercased() == repo.lowercased() })?.nameWithOwner {
+        ordered.append(official)
+      } else {
+        ordered.append(repo)
+      }
     }
 
     // 2. Newly selected repos in order of recent pushes (from allRepositories)
-    for repo in allRepositories where selectedRepos.contains(repo.nameWithOwner) && !ordered.contains(repo.nameWithOwner) {
+    for repo in allRepositories where isSelected(repo.nameWithOwner) && !ordered.contains(where: { $0.lowercased() == repo.nameWithOwner.lowercased() }) {
       ordered.append(repo.nameWithOwner)
     }
 
     // 3. Fallback for any selected repo not in allRepositories (e.g. manually typed)
-    for repo in selectedRepos where !ordered.contains(repo) {
+    for repo in selectedRepos where !ordered.contains(where: { $0.lowercased() == repo.lowercased() }) {
       ordered.append(repo)
     }
 
@@ -176,25 +225,12 @@ public final class RepositoryPickerViewModel: ObservableObject {
 
   private func mapRepoRadarError(_ error: RepoRadarError) {
     switch error {
-    case .tokenUnauthorized(let detail):
-      let lower = detail.lowercased()
-      if lower.contains("expired") {
-        errorMessage = "Token expired on GitHub. Please update your token in Settings → GitHub."
-      } else {
-        errorMessage = "GitHub authentication failed: \(detail)"
-      }
-    case .rateLimited(let resetAt):
-      if let resetAt {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        errorMessage = "GitHub API rate limit exceeded. Resets at \(formatter.string(from: resetAt))."
-      } else {
-        errorMessage = "GitHub API rate limit exceeded. Please try again later."
-      }
-    case .offline(let detail):
-      errorMessage = "Network offline: \(detail)"
-    case .serverError(let code, let detail):
-      errorMessage = "GitHub server error (\(code)): \(detail)"
+    case .tokenUnauthorized(let detail) where detail.lowercased().contains("expired"):
+      errorMessage = "Token expired on GitHub. Please update your token in Settings → GitHub."
+    case .rateLimited(let resetAt) where resetAt != nil:
+      let formatter = DateFormatter()
+      formatter.timeStyle = .short
+      errorMessage = "GitHub API rate limit exceeded. Resets at \(formatter.string(from: resetAt!))."
     default:
       errorMessage = error.localizedDescription
     }
