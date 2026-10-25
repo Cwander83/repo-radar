@@ -6,6 +6,7 @@ import RepoRadarCore
 final class AppModel: ObservableObject {
   let scheduler: RefreshScheduler?
   private var cancellable: AnyCancellable?
+  private var wakeCancellable: AnyCancellable?
 
   init(scheduler: RefreshScheduler? = RefreshScheduler()) {
     self.scheduler = scheduler
@@ -15,6 +16,14 @@ final class AppModel: ObservableObject {
         .receive(on: DispatchQueue.main)
         .sink { [weak self] _ in
           self?.objectWillChange.send()
+        }
+
+      // Refresh after sleep once the network is back (CHR-91).
+      wakeCancellable = NSWorkspace.shared.notificationCenter
+        .publisher(for: NSWorkspace.didWakeNotification)
+        .receive(on: DispatchQueue.main)
+        .sink { _ in
+          scheduler.handleWake()
         }
     }
     scheduler?.start()

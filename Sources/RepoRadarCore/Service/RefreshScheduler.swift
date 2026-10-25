@@ -18,6 +18,9 @@ public final class RefreshScheduler: ObservableObject {
   /// Widget reloader closure.
   public let widgetReloader: WidgetReloader
 
+  /// Waits for a usable network path before a refresh on wake.
+  public let networkMonitor: NetworkPathMonitoring
+
   /// Cached configuration loaded from ConfigStore to prevent UserDefaults reads during renders.
   @Published public private(set) var cachedConfig: RepoRadarConfig
 
@@ -44,6 +47,9 @@ public final class RefreshScheduler: ObservableObject {
 
   /// Currently active in-flight refresh task to prevent overlapping runs.
   private var activeRefreshTask: Task<WidgetSnapshot, Error>?
+
+  /// Refresh on wake that is waiting for the network.
+  private var wakeTask: Task<Void, Never>?
 
   // MARK: - Observable Status & Counts
 
@@ -94,6 +100,7 @@ public final class RefreshScheduler: ObservableObject {
   public init(
     service: RepoRadarService,
     clock: ClockProtocol = SystemClock(),
+    networkMonitor: NetworkPathMonitoring = SystemNetworkPathMonitor(),
     widgetReloader: @escaping WidgetReloader = {
       #if canImport(WidgetKit)
       WidgetCenter.shared.reloadAllTimelines()
@@ -102,6 +109,7 @@ public final class RefreshScheduler: ObservableObject {
   ) {
     self.service = service
     self.clock = clock
+    self.networkMonitor = networkMonitor
     self.widgetReloader = widgetReloader
     self.cachedConfig = service.configStore.load()
     self.hasToken = service.tokenStore.hasToken()
@@ -141,6 +149,7 @@ public final class RefreshScheduler: ObservableObject {
 
   deinit {
     timerTask?.cancel()
+    wakeTask?.cancel()
   }
 
   // MARK: - Lifecycle & Control
@@ -160,6 +169,8 @@ public final class RefreshScheduler: ObservableObject {
     isRunning = false
     timerTask?.cancel()
     timerTask = nil
+    wakeTask?.cancel()
+    wakeTask = nil
   }
 
   /// Triggers a manual refresh now and reschedules the timer.
@@ -209,6 +220,38 @@ public final class RefreshScheduler: ObservableObject {
       }
       throw error
     }
+  }
+
+  /// Refreshes after the Mac wakes, once the network path is satisfied (CHR-91).
+  ///
+  /// Skipped while stopped, when "Refresh on wake" is off, or while a rate-limit reset is still
+  /// ahead. A later wake or `stop()` cancels a refresh that is still waiting for the network.
+  /// Returns the waiting task, or nil when skipped.
+  @discardableResult
+  public func handleWake() -> Task<Void, Never>? {
+    wakeTask = nil
+    guard isRunning, cachedConfig.refreshOnWake else { return nil }
+
+    if case .rateLimited(let resetAt) = lastError as? RepoRadarError,
+      (resetAt ?? .distantFuture) > clock.now
+    {
+      // The timer sleeps on uptime, which pauses while the Mac sleeps. Re-arm it so the
+      // rate-limit retry lands on the reset time instead of late by the sleep length.
+      restartTimer()
+      return nil
+    }
+
+    let task = Task { [weak self, networkMonitor] in
+      do {
+        try await networkMonitor.waitUntilSatisfied()
+      } catch {
+        return
+      }
+      guard !Task.isCancelled else { return }
+      _ = try? await self?.refreshNow()
+    }
+    wakeTask = task
+    return task
   }
 
   // MARK: - Timer & Backoff

@@ -466,4 +466,169 @@ struct RefreshSchedulerTests {
     // Ensure no further sleeps are scheduled after stop
     #expect(fakeClock.sleepCallCount == sleepCallsBefore)
   }
+
+  // MARK: - Refresh on wake (CHR-91)
+
+  private final class WakeQueryCounter: @unchecked Sendable {
+    var count = 0
+  }
+
+  /// Serves the recorded fixture for every query and counts the queries.
+  private func registerCountingFixture(_ ctx: TestContext) throws -> WakeQueryCounter {
+    let fixtureData = try loadRecordedPublicFixture()
+    let counter = WakeQueryCounter()
+    MockURLProtocol.registerHandler(id: ctx.mockID) { _ in
+      counter.count += 1
+      let response = HTTPURLResponse(
+        url: URL(string: "https://api.github.com/graphql")!,
+        statusCode: 200,
+        httpVersion: nil,
+        headerFields: ["Content-Type": "application/json"]
+      )!
+      return (response, fixtureData)
+    }
+    return counter
+  }
+
+  @Test("Wake waits for a satisfied network path, then refreshes (CHR-91)")
+  func testWakeRefreshesOnceNetworkIsSatisfied() async throws {
+    let ctx = try TestContext(pollInterval: .fiveMinutes)
+    defer { ctx.cleanup() }
+    let counter = try registerCountingFixture(ctx)
+
+    let fakeClock = FakeClock()
+    let network = FakeNetworkPathMonitor(isSatisfied: false)
+    let scheduler = RefreshScheduler(
+      service: ctx.service, clock: fakeClock, networkMonitor: network)
+
+    scheduler.start()
+    defer { scheduler.stop() }
+    try await fakeClock.waitForSleepCalls(count: 1)
+    #expect(counter.count == 1)
+
+    // Wi-Fi is still reconnecting: no query goes out yet.
+    let wake = try #require(scheduler.handleWake())
+    try await network.waitForPendingWaitCount(1)
+    #expect(counter.count == 1)
+
+    network.satisfy()
+    await wake.value
+    #expect(counter.count == 2)
+
+    // The wake refresh restarts the poll timer with a full interval.
+    try await fakeClock.waitForSleepCalls(count: 2)
+    try await fakeClock.waitForPendingSleepCount(1)
+    #expect(fakeClock.lastSleepRequestedDuration == 300)
+  }
+
+  @Test("Wake does nothing while Refresh on wake is off (CHR-91)")
+  func testWakeRespectsToggle() async throws {
+    let ctx = try TestContext(pollInterval: .fiveMinutes)
+    defer { ctx.cleanup() }
+    var config = ctx.configStore.load()
+    config.refreshOnWake = false
+    try ctx.configStore.save(config)
+    let counter = try registerCountingFixture(ctx)
+
+    let fakeClock = FakeClock()
+    let scheduler = RefreshScheduler(
+      service: ctx.service, clock: fakeClock, networkMonitor: FakeNetworkPathMonitor())
+
+    scheduler.start()
+    defer { scheduler.stop() }
+    try await fakeClock.waitForSleepCalls(count: 1)
+
+    #expect(scheduler.handleWake() == nil)
+    #expect(counter.count == 1)
+
+    // Turning the toggle back on in Settings applies without restarting the app.
+    config.refreshOnWake = true
+    try ctx.configStore.save(config)
+    scheduler.configurationDidChange()
+    let wake = try #require(scheduler.handleWake())
+    await wake.value
+    #expect(counter.count == 2)
+  }
+
+  @Test("Wake waits out a pending rate-limit reset, then refreshes once it passes (CHR-91)")
+  func testWakeRespectsRateLimitReset() async throws {
+    let ctx = try TestContext(pollInterval: .fiveMinutes)
+    defer { ctx.cleanup() }
+
+    let fakeClock = FakeClock()
+    let resetEpoch = Int(fakeClock.now.timeIntervalSince1970) + 1800
+    let counter = WakeQueryCounter()
+    MockURLProtocol.registerHandler(id: ctx.mockID) { request in
+      counter.count += 1
+      let response = HTTPURLResponse(
+        url: request.url!,
+        statusCode: 403,
+        httpVersion: nil,
+        headerFields: [
+          "x-ratelimit-remaining": "0",
+          "x-ratelimit-reset": "\(resetEpoch)",
+        ]
+      )!
+      return (response, Data("rate limit exceeded".utf8))
+    }
+
+    let scheduler = RefreshScheduler(
+      service: ctx.service, clock: fakeClock, networkMonitor: FakeNetworkPathMonitor())
+
+    scheduler.start()
+    defer { scheduler.stop() }
+    try await fakeClock.waitForSleepCalls(count: 1)
+    #expect(counter.count == 1)
+    #expect(fakeClock.lastSleepRequestedDuration == 1800)
+
+    // Wake 10 minutes later, before the reset: no query, and the timer is re-armed for the
+    // 20 minutes left instead of running late by the sleep length.
+    fakeClock.advance(by: 600)
+    #expect(scheduler.handleWake() == nil)
+    #expect(counter.count == 1)
+    try await fakeClock.waitForSleepCalls(count: 2)
+    try await fakeClock.waitForPendingSleepCount(1)
+    #expect(fakeClock.lastSleepRequestedDuration == 1200)
+
+    // The timer retries at the reset. Once the reset has passed, a wake refreshes right away.
+    fakeClock.advance(by: 1201)
+    try await fakeClock.waitForSleepCalls(count: 3)
+    #expect(counter.count == 2)
+
+    let wake = try #require(scheduler.handleWake())
+    await wake.value
+    #expect(counter.count == 3)
+  }
+
+  @Test("A new wake or stop() cancels a wake refresh still waiting for the network (CHR-91)")
+  func testWakeWaitIsReplacedAndCancelled() async throws {
+    let ctx = try TestContext(pollInterval: .fiveMinutes)
+    defer { ctx.cleanup() }
+    let counter = try registerCountingFixture(ctx)
+
+    let fakeClock = FakeClock()
+    let network = FakeNetworkPathMonitor(isSatisfied: false)
+    let scheduler = RefreshScheduler(
+      service: ctx.service, clock: fakeClock, networkMonitor: network)
+
+    scheduler.start()
+    defer { scheduler.stop() }
+    try await fakeClock.waitForSleepCalls(count: 1)
+
+    // A second wake replaces the first wait instead of stacking monitors.
+    let first = try #require(scheduler.handleWake())
+    try await network.waitForPendingWaitCount(1)
+    let second = try #require(scheduler.handleWake())
+    await first.value
+    try await network.waitForPendingWaitCount(1)
+
+    // stop() cancels the remaining wait, and a stopped scheduler ignores wakes.
+    scheduler.stop()
+    await second.value
+    #expect(network.pendingWaitCount == 0)
+    #expect(scheduler.handleWake() == nil)
+
+    network.satisfy()
+    #expect(counter.count == 1)
+  }
 }

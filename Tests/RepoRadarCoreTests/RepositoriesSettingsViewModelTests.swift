@@ -266,7 +266,7 @@ struct RepositoriesSettingsViewModelTests {
       clock: fakeClock,
       onRefreshRequest: { refreshCount += 1 }
     )
-    weak var weakVM = vm
+    weak let weakVM = vm
 
     vm?.staleDays = 45
     try await fakeClock.waitForPendingSleepCount(1)
