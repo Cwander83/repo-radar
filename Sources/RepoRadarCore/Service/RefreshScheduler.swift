@@ -256,11 +256,18 @@ public final class RefreshScheduler: ObservableObject {
     }
   }
 
-  private func restartTimer() {
+  /// Restarts the background timer to apply updated polling intervals immediately.
+  public func restartTimer() {
     guard isRunning else { return }
     timerTask?.cancel()
     timerTask = Task { [weak self] in
       await self?.runLoop(skipInitialRefresh: true)
     }
+  }
+
+  /// Notifies the scheduler that configuration changed, restarting the timer and refreshing published state.
+  public func configurationDidChange() {
+    restartTimer()
+    objectWillChange.send()
   }
 }

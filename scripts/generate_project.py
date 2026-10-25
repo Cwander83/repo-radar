@@ -12,6 +12,8 @@ def generate_pbxproj():
 
 /* Begin PBXBuildFile section */
 \t\t000000000000000000000040 /* RepoRadarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000030 /* RepoRadarApp.swift */; };
+\t\t000000000000000000000045 /* PopoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000037 /* PopoverView.swift */; };
+\t\t000000000000000000000046 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000038 /* SettingsView.swift */; };
 \t\t000000000000000000000041 /* RepoRadarWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000000000000000000000032 /* RepoRadarWidget.swift */; };
 \t\t000000000000000000000042 /* RepoRadarWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 000000000000000000000021 /* RepoRadarWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 \t\t000000000000000000000043 /* RepoRadarCore in Frameworks */ = {isa = PBXBuildFile; productRef = 000000000000000000000091 /* RepoRadarCore */; };
@@ -46,6 +48,8 @@ def generate_pbxproj():
 \t\t000000000000000000000020 /* RepoRadar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RepoRadar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 \t\t000000000000000000000021 /* RepoRadarWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RepoRadarWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 \t\t000000000000000000000030 /* RepoRadarApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepoRadarApp.swift; sourceTree = "<group>"; };
+\t\t000000000000000000000037 /* PopoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverView.swift; sourceTree = "<group>"; };
+\t\t000000000000000000000038 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 \t\t000000000000000000000031 /* RepoRadar.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RepoRadar.entitlements; sourceTree = "<group>"; };
 \t\t000000000000000000000032 /* RepoRadarWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RepoRadarWidget.swift; sourceTree = "<group>"; };
 \t\t000000000000000000000033 /* RepoRadarWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RepoRadarWidget.entitlements; sourceTree = "<group>"; };
@@ -88,6 +92,8 @@ def generate_pbxproj():
 \t\t\tisa = PBXGroup;
 \t\t\tchildren = (
 \t\t\t\t000000000000000000000030 /* RepoRadarApp.swift */,
+\t\t\t\t000000000000000000000037 /* PopoverView.swift */,
+\t\t\t\t000000000000000000000038 /* SettingsView.swift */,
 \t\t\t\t000000000000000000000031 /* RepoRadar.entitlements */,
 \t\t\t\t000000000000000000000034 /* Info.plist */,
 \t\t\t);
@@ -203,6 +209,8 @@ def generate_pbxproj():
 \t\t\tbuildActionMask = 2147483647;
 \t\t\tfiles = (
 \t\t\t\t000000000000000000000040 /* RepoRadarApp.swift in Sources */,
+\t\t\t\t000000000000000000000045 /* PopoverView.swift in Sources */,
+\t\t\t\t000000000000000000000046 /* SettingsView.swift in Sources */,
 \t\t\t);
 \t\t\trunOnlyForDeploymentPostprocessing = 0;
 \t\t};

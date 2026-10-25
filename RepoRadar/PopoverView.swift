@@ -53,7 +53,10 @@ public struct PopoverView: View {
 
   private func openSettings() {
     #if canImport(AppKit)
-    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+    NSApp.activate(ignoringOtherApps: true)
+    if !NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil) {
+      NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+    }
     #endif
   }
 }
