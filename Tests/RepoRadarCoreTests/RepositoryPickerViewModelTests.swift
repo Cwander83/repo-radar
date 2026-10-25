@@ -12,15 +12,23 @@ struct RepositoryPickerViewModelTests {
   }
 
   private func makeSampleRepos(count: Int) -> [ViewerRepositoryNode] {
-    (1...count).map { i in
-      ViewerRepositoryNode(
+    var repos: [ViewerRepositoryNode] = []
+    repos.reserveCapacity(count)
+    for i in 1...count {
+      let isPrivate = (i % 2 == 0)
+      let isArchived = (i % 5 == 0)
+      let offset = TimeInterval(-i * 3600)
+      let pushed = Date().addingTimeInterval(offset)
+      let repo = ViewerRepositoryNode(
         nameWithOwner: "owner/repo-\(i)",
-        isPrivate: i % 2 == 0,
-        isArchived: i % 5 == 0,
-        pushedAt: Date().addingTimeInterval(TimeInterval(-i * 3600)),
+        isPrivate: isPrivate,
+        isArchived: isArchived,
+        pushedAt: pushed,
         defaultBranchRef: RefBranch(name: "main")
       )
+      repos.append(repo)
     }
+    return repos
   }
 
   @Test("Initializes with watched repos checked and matches selection state")
@@ -94,13 +102,19 @@ struct RepositoryPickerViewModelTests {
 
     let configStore = ConfigStore(userDefaults: defaults)
     let tokenStore = InMemoryTokenStore(initialToken: "test-token")
-    let repos = (1...35).map { i in
-      ViewerRepositoryNode(
-        nameWithOwner: "owner/repo-\(i)",
-        isPrivate: false,
-        isArchived: false,
-        pushedAt: Date().addingTimeInterval(TimeInterval(-i * 3600)),
-        defaultBranchRef: RefBranch(name: "main")
+    var repos: [ViewerRepositoryNode] = []
+    repos.reserveCapacity(35)
+    for i in 1...35 {
+      let offset = TimeInterval(-i * 3600)
+      let pushed = Date().addingTimeInterval(offset)
+      repos.append(
+        ViewerRepositoryNode(
+          nameWithOwner: "owner/repo-\(i)",
+          isPrivate: false,
+          isArchived: false,
+          pushedAt: pushed,
+          defaultBranchRef: RefBranch(name: "main")
+        )
       )
     }
 
