@@ -225,7 +225,10 @@ public final class RefreshScheduler: ObservableObject {
         return 60.0
 
       case .offline:
-        // Exponential backoff starting at 60s: 60s, 120s, 240s... capped at normalInterval
+        // Exponential backoff starting at 60s: 60s, 120s, 240s... capped at normalInterval.
+        // Intentional (CHR-97): early offline retries may come sooner than a normal poll so the
+        // widget recovers quickly once the network returns. Offline attempts never reach GitHub,
+        // so they cost no rate limit. The cap keeps retries from ever being slower than a poll.
         let exponent = Double(min(max(consecutiveOfflineCount - 1, 0), 5))
         let backoff = 60.0 * pow(2.0, exponent)
         return min(normalInterval, backoff)
