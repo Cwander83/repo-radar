@@ -18,6 +18,12 @@ public final class RefreshScheduler: ObservableObject {
   /// Widget reloader closure.
   public let widgetReloader: WidgetReloader
 
+  /// Cached configuration loaded from ConfigStore to prevent UserDefaults reads during renders.
+  @Published public private(set) var cachedConfig: RepoRadarConfig
+
+  /// Cached indication of whether a GitHub token is present in the TokenStore to prevent Keychain reads during renders.
+  @Published public private(set) var hasToken: Bool = false
+
   /// Latest snapshot loaded or produced by refresh.
   @Published public private(set) var latestSnapshot: WidgetSnapshot?
 
@@ -73,15 +79,12 @@ public final class RefreshScheduler: ObservableObject {
 
   /// Current menu bar state derived from snapshot status, failing CI count, and configuration.
   public var menuBarState: MenuBarState {
-    let config = service.configStore.load()
-    let hasToken = service.tokenStore.hasToken()
-    let hasWatchedRepos = !config.watchedRepos.isEmpty
-    return MenuBarState.current(
+    MenuBarState.current(
       status: status,
       failingCICount: failingCICount,
-      showMenuBarCount: config.showMenuBarCount,
+      showMenuBarCount: cachedConfig.showMenuBarCount,
       hasToken: hasToken,
-      hasWatchedRepos: hasWatchedRepos
+      hasWatchedRepos: !cachedConfig.watchedRepos.isEmpty
     )
   }
 
@@ -100,6 +103,8 @@ public final class RefreshScheduler: ObservableObject {
     self.service = service
     self.clock = clock
     self.widgetReloader = widgetReloader
+    self.cachedConfig = service.configStore.load()
+    self.hasToken = service.tokenStore.hasToken()
     self.latestSnapshot = try? service.snapshotStore.read()
   }
 
@@ -142,6 +147,7 @@ public final class RefreshScheduler: ObservableObject {
 
   /// Starts periodic background refreshing if not already running.
   public func start() {
+    refreshCachedState()
     guard !isRunning else { return }
     isRunning = true
     timerTask = Task { [weak self] in
@@ -180,6 +186,7 @@ public final class RefreshScheduler: ObservableObject {
     defer {
       activeRefreshTask = nil
       isRefreshing = false
+      refreshCachedState()
     }
 
     do {
@@ -208,8 +215,7 @@ public final class RefreshScheduler: ObservableObject {
 
   /// Computes the delay in seconds before the next scheduled refresh.
   public func computeDelay(after error: Error?) -> TimeInterval {
-    let config = service.configStore.load()
-    let normalInterval = config.pollInterval.timeInterval
+    let normalInterval = cachedConfig.pollInterval.timeInterval
 
     guard let error else {
       return normalInterval
@@ -268,8 +274,15 @@ public final class RefreshScheduler: ObservableObject {
     }
   }
 
+  /// Refreshes cached token and configuration state to avoid Keychain/UserDefaults reads during renders.
+  public func refreshCachedState() {
+    self.cachedConfig = service.configStore.load()
+    self.hasToken = service.tokenStore.hasToken()
+  }
+
   /// Notifies the scheduler that configuration changed, restarting the timer and refreshing published state.
   public func configurationDidChange() {
+    refreshCachedState()
     restartTimer()
     objectWillChange.send()
   }

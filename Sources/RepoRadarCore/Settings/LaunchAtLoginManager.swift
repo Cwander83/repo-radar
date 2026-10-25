@@ -22,6 +22,12 @@ public enum LaunchAtLoginStatus: String, Sendable, Equatable, CaseIterable {
       return "Not Found"
     }
   }
+
+  /// Whether the General tab shows the toggle as on. `.requiresApproval` counts as on:
+  /// the app is registered and only waiting for the user to approve it in System Settings.
+  public var isOn: Bool {
+    self == .enabled || self == .requiresApproval
+  }
 }
 
 /// Protocol abstracting login item management for the host app.

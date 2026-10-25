@@ -76,10 +76,13 @@ public enum MenuBarState: Equatable, Sendable {
     }
 
     switch status {
-    case .tokenError, .corrupt, .unsupportedVersion, .serverError:
+    case .tokenError, .corrupt, .unsupportedVersion:
       return .error
 
-    case .offline:
+    // A GitHub 5xx (and GraphQL, decoding or unknown errors, which share `.serverError`) is
+    // treated like Offline: dimmed and transient, with the last data kept (CHR-101). Error is
+    // reserved for token and config problems the user has to fix (CHR-81).
+    case .offline, .serverError:
       return .offline
 
     case .missing:

@@ -366,6 +366,32 @@ struct ClassificationTests {
     #expect(staleNames == ["feat/unprotected-no-pr"])
   }
 
+  @Test("Empty repository has no default branch instead of a made-up \"main\" (CHR-101)")
+  func emptyRepoHasNilDefaultBranch() {
+    let emptyRepo = RepositoryNode(
+      nameWithOwner: "owner/empty",
+      url: URL(string: "https://github.com/owner/empty")!,
+      isPrivate: false,
+      isArchived: false,
+      defaultBranchRef: nil,
+      mainRef: nil,
+      pullRequests: PullRequestConnection(totalCount: 0, nodes: []),
+      refs: RefConnection(totalCount: 0, pageInfo: nil, nodes: [])
+    )
+
+    let watched = Classifier.classify(
+      repos: [emptyRepo],
+      watchedRepos: ["owner/empty"],
+      viewerLogin: "owner"
+    )
+    #expect(watched.repositoryAccess.count == 1)
+    #expect(watched.repositoryAccess.first?.hasAccess == true)
+    #expect(watched.repositoryAccess.first?.defaultBranch == nil)
+
+    let unwatched = Classifier.classify(repos: [emptyRepo], viewerLogin: "owner")
+    #expect(unwatched.repositoryAccess.first?.defaultBranch == nil)
+  }
+
   @Test("Draft PR failing check is excluded from CI scope")
   func draftPRChecksIgnored() {
     let failingCommit = CommitTarget(

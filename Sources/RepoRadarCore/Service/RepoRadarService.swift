@@ -146,11 +146,12 @@ public struct RepoRadarService: Sendable {
     }
   }
 
-  /// Builds a fallback snapshot for error states, preserving cached data when offline or rate-limited.
+  /// Builds a fallback snapshot for error states, preserving cached data for transient
+  /// failures: offline, rate-limited, and GitHub server errors (CHR-101).
   private func makeFallbackSnapshot(status: SnapshotStatus, now: Date) -> WidgetSnapshot {
     let shouldPreserveData: Bool
     switch status {
-    case .offline, .rateLimited:
+    case .offline, .rateLimited, .serverError:
       shouldPreserveData = true
     default:
       shouldPreserveData = false
@@ -159,7 +160,7 @@ public struct RepoRadarService: Sendable {
     if shouldPreserveData, let last = try? snapshotStore.read() {
       let lastHoldsData: Bool
       switch last.status {
-      case .ok, .offline, .rateLimited:
+      case .ok, .offline, .rateLimited, .serverError:
         lastHoldsData = true
       default:
         lastHoldsData = false

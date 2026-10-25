@@ -74,12 +74,10 @@ public final class GeneralSettingsViewModel: ObservableObject {
 
     let initialLaunchAtLogin: Bool
     switch systemStatus {
-    case .enabled, .requiresApproval:
-      initialLaunchAtLogin = true
-    case .notRegistered:
-      initialLaunchAtLogin = false
     case .notFound:
       initialLaunchAtLogin = config.launchAtLogin
+    case .enabled, .requiresApproval, .notRegistered:
+      initialLaunchAtLogin = systemStatus.isOn
     }
     self.launchAtLogin = initialLaunchAtLogin
 
@@ -106,7 +104,7 @@ public final class GeneralSettingsViewModel: ObservableObject {
     launchAtLoginStatus = systemStatus
     guard systemStatus != .notFound else { return }
 
-    let systemEnabled = (systemStatus == .enabled || systemStatus == .requiresApproval)
+    let systemEnabled = systemStatus.isOn
     if launchAtLogin != systemEnabled {
       isSyncingLaunchAtLogin = true
       launchAtLogin = systemEnabled
@@ -138,7 +136,7 @@ public final class GeneralSettingsViewModel: ObservableObject {
       save()
     } catch {
       isSyncingLaunchAtLogin = true
-      launchAtLogin = launchAtLoginManager.isEnabled
+      launchAtLogin = launchAtLoginManager.status.isOn
       launchAtLoginStatus = launchAtLoginManager.status
       isSyncingLaunchAtLogin = false
       launchAtLoginError = "Failed to update launch at login: \(error.localizedDescription)"

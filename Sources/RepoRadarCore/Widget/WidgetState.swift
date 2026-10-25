@@ -164,7 +164,8 @@ public enum WidgetState: Sendable, Equatable {
       return .tokenError(detail: detail)
 
     case .serverError(let detail):
-      return .error(detail: detail ?? "GitHub server error")
+      // Transient like Offline: show the last data dimmed, with the error as the footer (CHR-101).
+      return .offline(snapshot: snapshot, detail: detail ?? "GitHub server error")
 
     case .corrupt(let detail):
       return .error(detail: detail)

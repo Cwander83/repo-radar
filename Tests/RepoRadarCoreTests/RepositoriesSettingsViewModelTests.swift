@@ -218,21 +218,37 @@ struct RepositoriesSettingsViewModelTests {
     #expect(refreshCount == 1)
   }
 
-  @Test("Modifying stale days threshold persists to config store")
+  @Test("Modifying stale days threshold persists to config store and debounces refresh (CHR-101)")
   @MainActor
-  func modifyingStaleDays() {
+  func modifyingStaleDays() async throws {
     let (defaults, suite) = makeTestDefaults()
     defer { defaults.removePersistentDomain(forName: suite) }
 
     let store = ConfigStore(userDefaults: defaults)
+    let fakeClock = FakeClock()
     var refreshCount = 0
     let vm = RepositoriesSettingsViewModel(
       configStore: store,
+      clock: fakeClock,
       onRefreshRequest: { refreshCount += 1 }
     )
 
+    // Rapidly change staleDays multiple times (simulating holding or repeatedly clicking stepper)
+    vm.staleDays = 31
+    vm.staleDays = 32
     vm.staleDays = 60
+
     #expect(store.load().staleDays == 60)
+    #expect(refreshCount == 0)
+
+    try await fakeClock.waitForPendingSleepCount(1)
+    fakeClock.advance(by: 1.0)
+
+    for _ in 0..<50 {
+      if refreshCount == 1 { break }
+      try await Task.sleep(nanoseconds: 10_000_000)
+    }
+
     #expect(refreshCount == 1)
   }
 

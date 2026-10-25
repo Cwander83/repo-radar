@@ -14,6 +14,8 @@ public struct WidgetDisplayItem: Identifiable, Sendable, Equatable {
   public let repo: String
   public let title: String
   public let subtitle: String
+  public let subtitlePrefix: String?
+  public let timestamp: Date?
   public let iconName: String
   public let url: URL?
 
@@ -23,6 +25,8 @@ public struct WidgetDisplayItem: Identifiable, Sendable, Equatable {
     repo: String,
     title: String,
     subtitle: String,
+    subtitlePrefix: String? = nil,
+    timestamp: Date? = nil,
     iconName: String,
     url: URL? = nil
   ) {
@@ -31,6 +35,8 @@ public struct WidgetDisplayItem: Identifiable, Sendable, Equatable {
     self.repo = repo
     self.title = title
     self.subtitle = subtitle
+    self.subtitlePrefix = subtitlePrefix
+    self.timestamp = timestamp
     self.iconName = iconName
     self.url = url
   }
@@ -70,6 +76,8 @@ extension WidgetSnapshot {
           repo: item.repo,
           title: "\(item.repo) · \(item.ref)",
           subtitle: "\(item.check) · \(timeText)",
+          subtitlePrefix: item.check,
+          timestamp: item.completedAt,
           iconName: "xmark.circle.fill",
           url: WidgetGitHubURL.url(for: item)
         )
@@ -85,6 +93,8 @@ extension WidgetSnapshot {
           repo: item.repo,
           title: "\(item.repo) · \(item.ref)",
           subtitle: "\(item.check) · running",
+          subtitlePrefix: "\(item.check) · running",
+          timestamp: nil,
           iconName: "circle.dashed",
           url: WidgetGitHubURL.url(for: item)
         )
@@ -97,17 +107,19 @@ extension WidgetSnapshot {
     }
     for pr in sortedPRs {
       let timeText = Self.relativeTimeString(from: pr.updatedAt, relativeTo: now)
-      let subtitle =
+      let prefix =
         pr.isReviewRequested
-        ? "\(pr.repo) #\(pr.number) · review requested · \(timeText)"
-        : "\(pr.repo) #\(pr.number) · \(timeText)"
+        ? "\(pr.repo) #\(pr.number) · review requested"
+        : "\(pr.repo) #\(pr.number)"
       items.append(
         WidgetDisplayItem(
           id: "pr-\(pr.id)",
           kind: .pullRequest(isReviewRequested: pr.isReviewRequested),
           repo: pr.repo,
           title: pr.title,
-          subtitle: subtitle,
+          subtitle: "\(prefix) · \(timeText)",
+          subtitlePrefix: prefix,
+          timestamp: pr.updatedAt,
           iconName: pr.isReviewRequested ? "eye" : "arrow.triangle.pull",
           url: WidgetGitHubURL.url(for: pr)
         )
@@ -116,13 +128,16 @@ extension WidgetSnapshot {
 
     // 4. Stale branches
     for branch in staleBranches {
+      let subtitle = "\(branch.repo) · \(branch.ageDays)d"
       items.append(
         WidgetDisplayItem(
           id: "stale-\(branch.id)",
           kind: .staleBranch,
           repo: branch.repo,
           title: branch.branch,
-          subtitle: "\(branch.repo) · \(branch.ageDays)d",
+          subtitle: subtitle,
+          subtitlePrefix: subtitle,
+          timestamp: nil,
           iconName: "arrow.triangle.branch",
           url: WidgetGitHubURL.url(for: branch)
         )

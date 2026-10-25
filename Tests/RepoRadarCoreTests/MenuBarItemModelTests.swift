@@ -36,8 +36,13 @@ struct MenuBarItemModelTests {
     #expect(
       MenuBarState.current(status: .unsupportedVersion(version: 99), failingCICount: 0) == .error
     )
+
+    // Server error status is transient like offline (CHR-101)
     #expect(
-      MenuBarState.current(status: .serverError(detail: "500"), failingCICount: 0) == .error
+      MenuBarState.current(status: .serverError(detail: "500"), failingCICount: 0) == .offline
+    )
+    #expect(
+      MenuBarState.current(status: .serverError(detail: "500"), failingCICount: 4) == .offline
     )
 
     // Offline status
@@ -190,6 +195,7 @@ struct MenuBarItemModelTests {
     var disabledConfig = configStore.load()
     disabledConfig.showMenuBarCount = false
     try configStore.save(disabledConfig)
+    schedulerWithSnapshot.configurationDidChange()
 
     #expect(schedulerWithSnapshot.menuBarState == MenuBarState.clear)
   }

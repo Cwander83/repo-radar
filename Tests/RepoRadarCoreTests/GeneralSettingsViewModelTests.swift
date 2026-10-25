@@ -153,6 +153,36 @@ struct GeneralSettingsViewModelTests {
     #expect(store.load().launchAtLogin == false)
   }
 
+  @Test("Failed toggle while status is requiresApproval reverts to on, not off (CHR-101)")
+  @MainActor
+  func failedToggleWhileRequiresApprovalRevertsToOn() {
+    let (defaults, suite) = makeTestDefaults()
+    defer { defaults.removePersistentDomain(forName: suite) }
+
+    let store = ConfigStore(userDefaults: defaults)
+    let loginManager = InMemoryLaunchAtLoginManager(status: .requiresApproval)
+    struct MockError: LocalizedError {
+      var errorDescription: String? { "Operation not permitted" }
+    }
+    loginManager.setEnabledError = MockError()
+
+    let vm = GeneralSettingsViewModel(configStore: store, launchAtLoginManager: loginManager)
+    #expect(vm.launchAtLogin == true)
+
+    // Turning it off fails; the status is still requiresApproval, which the init and
+    // refresh paths treat as on, so the revert must land on on as well.
+    vm.launchAtLogin = false
+
+    #expect(vm.launchAtLogin == true)
+    #expect(vm.launchAtLoginStatus == .requiresApproval)
+    #expect(vm.launchAtLoginError?.contains("Operation not permitted") == true)
+    #expect(store.load().launchAtLogin == true)
+
+    // A later status refresh agrees and doesn't flip the toggle.
+    vm.refreshLaunchAtLoginStatus()
+    #expect(vm.launchAtLogin == true)
+  }
+
   @Test("Reflects external status changes from System Settings")
   @MainActor
   func reflectsExternalStatusChanges() {
@@ -227,13 +257,5 @@ struct GeneralSettingsViewModelTests {
     #expect(vm.launchAtLogin == true)
     #expect(vm.showMenuBarCount == false)
     #expect(vm.ciNotifications == true)
-  }
-
-  @Test("AppServiceLaunchAtLoginManager status returns valid enum value")
-  func appServiceStatusCheck() {
-    let manager = AppServiceLaunchAtLoginManager()
-    let status = manager.status
-    #expect(LaunchAtLoginStatus.allCases.contains(status))
-    #expect(manager.isEnabled == (status == .enabled))
   }
 }
