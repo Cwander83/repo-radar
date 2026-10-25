@@ -229,6 +229,7 @@ public final class RefreshScheduler: ObservableObject {
   /// Returns the waiting task, or nil when skipped.
   @discardableResult
   public func handleWake() -> Task<Void, Never>? {
+    wakeTask?.cancel()
     wakeTask = nil
     guard isRunning, cachedConfig.refreshOnWake else { return nil }
 
