@@ -38,6 +38,7 @@ public struct SettingsView: View {
   @State private var selectedTab: SettingsTab
   public let configStore: ConfigStore
   public let tokenStore: any TokenStore
+  public let launchAtLoginManager: any LaunchAtLoginManaging
   public let snapshot: WidgetSnapshot?
   public let snapshotPublisher: AnyPublisher<WidgetSnapshot?, Never>?
   public var onConfigChange: ((RepoRadarConfig) -> Void)?
@@ -46,6 +47,7 @@ public struct SettingsView: View {
   public init(
     configStore: ConfigStore,
     tokenStore: any TokenStore,
+    launchAtLoginManager: any LaunchAtLoginManaging = AppServiceLaunchAtLoginManager(),
     snapshot: WidgetSnapshot? = nil,
     snapshotPublisher: AnyPublisher<WidgetSnapshot?, Never>? = nil,
     initialTab: SettingsTab = .general,
@@ -54,6 +56,7 @@ public struct SettingsView: View {
   ) {
     self.configStore = configStore
     self.tokenStore = tokenStore
+    self.launchAtLoginManager = launchAtLoginManager
     self.snapshot = snapshot
     self.snapshotPublisher = snapshotPublisher
     self._selectedTab = State(initialValue: initialTab)
@@ -64,6 +67,7 @@ public struct SettingsView: View {
   public init(
     configStore: ConfigStore,
     scheduler: RefreshScheduler,
+    launchAtLoginManager: any LaunchAtLoginManaging = AppServiceLaunchAtLoginManager(),
     initialTab: SettingsTab = .general,
     onConfigChange: ((RepoRadarConfig) -> Void)? = nil,
     onRefreshRequest: (() -> Void)? = nil
@@ -71,6 +75,7 @@ public struct SettingsView: View {
     self.init(
       configStore: configStore,
       tokenStore: scheduler.service.tokenStore,
+      launchAtLoginManager: launchAtLoginManager,
       snapshot: scheduler.latestSnapshot,
       snapshotPublisher: scheduler.$latestSnapshot.eraseToAnyPublisher(),
       initialTab: initialTab,
@@ -81,7 +86,11 @@ public struct SettingsView: View {
 
   public var body: some View {
     TabView(selection: $selectedTab) {
-      GeneralSettingsView(configStore: configStore, onConfigChange: onConfigChange)
+      GeneralSettingsView(
+        configStore: configStore,
+        launchAtLoginManager: launchAtLoginManager,
+        onConfigChange: onConfigChange
+      )
         .tabItem {
           Label(SettingsTab.general.title, systemImage: SettingsTab.general.systemImage)
         }
@@ -125,10 +134,15 @@ public struct GeneralSettingsView: View {
 
   public init(
     configStore: ConfigStore,
+    launchAtLoginManager: any LaunchAtLoginManaging = AppServiceLaunchAtLoginManager(),
     onConfigChange: ((RepoRadarConfig) -> Void)? = nil
   ) {
     self._viewModel = StateObject(
-      wrappedValue: GeneralSettingsViewModel(configStore: configStore, onConfigChange: onConfigChange)
+      wrappedValue: GeneralSettingsViewModel(
+        configStore: configStore,
+        launchAtLoginManager: launchAtLoginManager,
+        onConfigChange: onConfigChange
+      )
     )
   }
 
@@ -150,6 +164,29 @@ public struct GeneralSettingsView: View {
 
       Section {
         Toggle("Launch at login", isOn: $viewModel.launchAtLogin)
+
+        if viewModel.launchAtLoginStatus == .requiresApproval {
+          HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+              .foregroundStyle(.orange)
+            Text("Requires approval in System Settings")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+            Spacer()
+            Button("Open Settings") {
+              viewModel.openSystemSettingsLoginItems()
+            }
+            .buttonStyle(.link)
+            .font(.caption)
+          }
+        }
+
+        if let error = viewModel.launchAtLoginError {
+          Text(error)
+            .font(.caption)
+            .foregroundStyle(.red)
+        }
+
         Toggle("Show failing-CI count in the menu bar", isOn: $viewModel.showMenuBarCount)
       }
 
@@ -165,6 +202,9 @@ public struct GeneralSettingsView: View {
     .toggleStyle(.switch)
     .frame(width: 480)
     .padding(.bottom, 8)
+    .onAppear {
+      viewModel.refreshLaunchAtLoginStatus()
+    }
   }
 }
 
@@ -653,13 +693,27 @@ private func makePreviewSnapshot() -> WidgetSnapshot {
 }
 
 #Preview("General Settings - Light") {
-  GeneralSettingsView(configStore: makePreviewStore())
-    .preferredColorScheme(.light)
+  GeneralSettingsView(
+    configStore: makePreviewStore(),
+    launchAtLoginManager: InMemoryLaunchAtLoginManager(status: .enabled)
+  )
+  .preferredColorScheme(.light)
 }
 
 #Preview("General Settings - Dark") {
-  GeneralSettingsView(configStore: makePreviewStore())
-    .preferredColorScheme(.dark)
+  GeneralSettingsView(
+    configStore: makePreviewStore(),
+    launchAtLoginManager: InMemoryLaunchAtLoginManager(status: .enabled)
+  )
+  .preferredColorScheme(.dark)
+}
+
+#Preview("General Settings - Requires Approval") {
+  GeneralSettingsView(
+    configStore: makePreviewStore(),
+    launchAtLoginManager: InMemoryLaunchAtLoginManager(status: .requiresApproval)
+  )
+  .preferredColorScheme(.dark)
 }
 
 #Preview("Repositories Settings - Light") {
@@ -682,6 +736,7 @@ private func makePreviewSnapshot() -> WidgetSnapshot {
   SettingsView(
     configStore: makePreviewStore(),
     tokenStore: makePreviewValidTokenStore(),
+    launchAtLoginManager: InMemoryLaunchAtLoginManager(status: .enabled),
     snapshot: makePreviewSnapshot(),
     initialTab: .repositories
   )
@@ -692,6 +747,7 @@ private func makePreviewSnapshot() -> WidgetSnapshot {
   SettingsView(
     configStore: makePreviewStore(),
     tokenStore: makePreviewValidTokenStore(),
+    launchAtLoginManager: InMemoryLaunchAtLoginManager(status: .enabled),
     snapshot: makePreviewSnapshot(),
     initialTab: .repositories
   )
