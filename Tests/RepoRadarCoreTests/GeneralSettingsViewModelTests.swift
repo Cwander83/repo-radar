@@ -18,20 +18,44 @@ struct GeneralSettingsViewModelTests {
     #expect(PollInterval.fifteenMinutes.displayName == "15 minutes")
   }
 
-  @Test("Initializes with values from config store")
+  @Test("Initializes with values from config store and launchAtLoginManager")
   @MainActor
   func initializesWithDefaults() {
     let (defaults, suite) = makeTestDefaults()
     defer { defaults.removePersistentDomain(forName: suite) }
 
     let store = ConfigStore(userDefaults: defaults)
-    let vm = GeneralSettingsViewModel(configStore: store)
+    let loginManager = InMemoryLaunchAtLoginManager(status: .notRegistered)
+    let vm = GeneralSettingsViewModel(configStore: store, launchAtLoginManager: loginManager)
 
     #expect(vm.pollInterval == .fiveMinutes)
     #expect(vm.refreshOnWake == true)
     #expect(vm.launchAtLogin == false)
+    #expect(vm.launchAtLoginStatus == .notRegistered)
     #expect(vm.showMenuBarCount == true)
     #expect(vm.ciNotifications == false)
+  }
+
+  @Test("Initializes reflecting real system login item status when enabled or requiresApproval")
+  @MainActor
+  func initializesReflectingSystemStatus() {
+    let (defaults, suite) = makeTestDefaults()
+    defer { defaults.removePersistentDomain(forName: suite) }
+
+    let store = ConfigStore(userDefaults: defaults)
+
+    // When system is enabled:
+    let enabledManager = InMemoryLaunchAtLoginManager(status: .enabled)
+    let vmEnabled = GeneralSettingsViewModel(configStore: store, launchAtLoginManager: enabledManager)
+    #expect(vmEnabled.launchAtLogin == true)
+    #expect(vmEnabled.launchAtLoginStatus == .enabled)
+    #expect(store.load().launchAtLogin == true)
+
+    // When system requires approval:
+    let approvalManager = InMemoryLaunchAtLoginManager(status: .requiresApproval)
+    let vmApproval = GeneralSettingsViewModel(configStore: store, launchAtLoginManager: approvalManager)
+    #expect(vmApproval.launchAtLogin == true)
+    #expect(vmApproval.launchAtLoginStatus == .requiresApproval)
   }
 
   @Test("Modifying each control persists to config store and triggers callback")
@@ -41,10 +65,11 @@ struct GeneralSettingsViewModelTests {
     defer { defaults.removePersistentDomain(forName: suite) }
 
     let store = ConfigStore(userDefaults: defaults)
+    let loginManager = InMemoryLaunchAtLoginManager(status: .notRegistered)
     var changeCount = 0
     var latestConfig: RepoRadarConfig?
 
-    let vm = GeneralSettingsViewModel(configStore: store) { config in
+    let vm = GeneralSettingsViewModel(configStore: store, launchAtLoginManager: loginManager) { config in
       changeCount += 1
       latestConfig = config
     }
@@ -65,6 +90,8 @@ struct GeneralSettingsViewModelTests {
     vm.launchAtLogin = true
     #expect(store.load().launchAtLogin == true)
     #expect(latestConfig?.launchAtLogin == true)
+    #expect(loginManager.isEnabled == true)
+    #expect(loginManager.setEnabledCallCount == 1)
     #expect(changeCount == 3)
 
     // 4. Show failing-CI count in menu bar
@@ -84,23 +111,115 @@ struct GeneralSettingsViewModelTests {
     #expect(changeCount == 5)
   }
 
-  @Test("Reload updates properties from store")
+  @Test("Toggling launch at login unregisters from loginManager and persists")
+  @MainActor
+  func togglingLaunchAtLoginOff() {
+    let (defaults, suite) = makeTestDefaults()
+    defer { defaults.removePersistentDomain(forName: suite) }
+
+    let store = ConfigStore(userDefaults: defaults)
+    let loginManager = InMemoryLaunchAtLoginManager(status: .enabled)
+    let vm = GeneralSettingsViewModel(configStore: store, launchAtLoginManager: loginManager)
+
+    #expect(vm.launchAtLogin == true)
+    vm.launchAtLogin = false
+
+    #expect(loginManager.isEnabled == false)
+    #expect(loginManager.status == .notRegistered)
+    #expect(store.load().launchAtLogin == false)
+    #expect(vm.launchAtLoginError == nil)
+  }
+
+  @Test("Failed setEnabled reverts toggle and sets error message without updating store")
+  @MainActor
+  func failedSetEnabledReverts() {
+    let (defaults, suite) = makeTestDefaults()
+    defer { defaults.removePersistentDomain(forName: suite) }
+
+    let store = ConfigStore(userDefaults: defaults)
+    let loginManager = InMemoryLaunchAtLoginManager(status: .notRegistered)
+    struct MockError: LocalizedError {
+      var errorDescription: String? { "Operation not permitted" }
+    }
+    loginManager.setEnabledError = MockError()
+
+    let vm = GeneralSettingsViewModel(configStore: store, launchAtLoginManager: loginManager)
+    #expect(vm.launchAtLogin == false)
+
+    vm.launchAtLogin = true
+
+    #expect(vm.launchAtLogin == false)
+    #expect(vm.launchAtLoginError?.contains("Operation not permitted") == true)
+    #expect(store.load().launchAtLogin == false)
+  }
+
+  @Test("Reflects external status changes from System Settings")
+  @MainActor
+  func reflectsExternalStatusChanges() {
+    let (defaults, suite) = makeTestDefaults()
+    defer { defaults.removePersistentDomain(forName: suite) }
+
+    let store = ConfigStore(userDefaults: defaults)
+    let loginManager = InMemoryLaunchAtLoginManager(status: .notRegistered)
+    var changeCount = 0
+
+    let vm = GeneralSettingsViewModel(configStore: store, launchAtLoginManager: loginManager) { _ in
+      changeCount += 1
+    }
+
+    #expect(vm.launchAtLogin == false)
+
+    // User enables RepoRadar in System Settings -> Login Items:
+    loginManager.status = .enabled
+    vm.refreshLaunchAtLoginStatus()
+
+    #expect(vm.launchAtLogin == true)
+    #expect(vm.launchAtLoginStatus == .enabled)
+    #expect(store.load().launchAtLogin == true)
+    #expect(changeCount == 1)
+
+    // User disables RepoRadar in System Settings -> Login Items:
+    loginManager.status = .notRegistered
+    vm.refreshLaunchAtLoginStatus()
+
+    #expect(vm.launchAtLogin == false)
+    #expect(vm.launchAtLoginStatus == .notRegistered)
+    #expect(store.load().launchAtLogin == false)
+    #expect(changeCount == 2)
+  }
+
+  @Test("openSystemSettingsLoginItems calls through to manager")
+  @MainActor
+  func openSettingsDelegation() {
+    let (defaults, suite) = makeTestDefaults()
+    defer { defaults.removePersistentDomain(forName: suite) }
+
+    let store = ConfigStore(userDefaults: defaults)
+    let loginManager = InMemoryLaunchAtLoginManager(status: .requiresApproval)
+    let vm = GeneralSettingsViewModel(configStore: store, launchAtLoginManager: loginManager)
+
+    vm.openSystemSettingsLoginItems()
+    #expect(loginManager.openSettingsCallCount == 1)
+  }
+
+  @Test("Reload updates properties from store and refreshes login item status")
   @MainActor
   func reloadPicksUpExternalChanges() {
     let (defaults, suite) = makeTestDefaults()
     defer { defaults.removePersistentDomain(forName: suite) }
 
     let store = ConfigStore(userDefaults: defaults)
-    let vm = GeneralSettingsViewModel(configStore: store)
+    let loginManager = InMemoryLaunchAtLoginManager(status: .notRegistered)
+    let vm = GeneralSettingsViewModel(configStore: store, launchAtLoginManager: loginManager)
 
     var updated = store.load()
     updated.pollInterval = .fifteenMinutes
     updated.refreshOnWake = false
-    updated.launchAtLogin = true
     updated.showMenuBarCount = false
     updated.ciNotifications = true
     store.save(sanitizing: updated)
 
+    loginManager.status = .enabled
     vm.reload()
 
     #expect(vm.pollInterval == .fifteenMinutes)
@@ -108,5 +227,13 @@ struct GeneralSettingsViewModelTests {
     #expect(vm.launchAtLogin == true)
     #expect(vm.showMenuBarCount == false)
     #expect(vm.ciNotifications == true)
+  }
+
+  @Test("AppServiceLaunchAtLoginManager status returns valid enum value")
+  func appServiceStatusCheck() {
+    let manager = AppServiceLaunchAtLoginManager()
+    let status = manager.status
+    #expect(LaunchAtLoginStatus.allCases.contains(status))
+    #expect(manager.isEnabled == (status == .enabled))
   }
 }
