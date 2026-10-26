@@ -139,7 +139,8 @@ public struct PopoverContentView: View {
       if state == .token {
         bannerView(
           icon: "key.fill",
-          iconColor: .red,
+          iconColor: RepoRadarColors.statusFail,
+          textColor: RepoRadarColors.statusFailText,
           title: "GitHub token rejected",
           bodyText: "GitHub rejected the token. The data below is from your last refresh.",
           actionTitle: "Update Token…",
@@ -149,7 +150,8 @@ public struct PopoverContentView: View {
         // GitHub 5xx shows like Offline (dimmed, transient, last data kept), but names the cause.
         bannerView(
           icon: "exclamationmark.icloud",
-          iconColor: .orange,
+          iconColor: RepoRadarColors.statusStale,
+          textColor: RepoRadarColors.statusStaleText,
           title: "GitHub isn’t responding",
           bodyText: "\(bannerDetail(fallback: "GitHub server error")). Showing cached data. Repo Radar retries on the next refresh.",
           actionTitle: nil,
@@ -158,7 +160,8 @@ public struct PopoverContentView: View {
       } else if state == .offline {
         bannerView(
           icon: "wifi.slash",
-          iconColor: .orange,
+          iconColor: RepoRadarColors.statusStale,
+          textColor: RepoRadarColors.statusStaleText,
           title: "You’re offline",
           bodyText: "Showing cached data. Repo Radar retries when you’re back online.",
           actionTitle: nil,
@@ -167,7 +170,8 @@ public struct PopoverContentView: View {
       } else if state == .error {
         bannerView(
           icon: "exclamationmark.triangle.fill",
-          iconColor: .red,
+          iconColor: RepoRadarColors.statusFail,
+          textColor: RepoRadarColors.statusFailText,
           title: "Couldn't refresh",
           bodyText: "\(bannerDetail(fallback: "Couldn't read saved data")). The data below is from your last refresh.",
           actionTitle: nil,
@@ -210,12 +214,13 @@ public struct PopoverContentView: View {
     HStack(spacing: 10) {
       ZStack {
         RoundedRectangle(cornerRadius: 7, style: .continuous)
-          .fill(Color.indigo.opacity(0.14))
+          .fill(RepoRadarColors.statusIndigo.opacity(0.14))
           .frame(width: 28, height: 28)
         Image(systemName: AppSymbol.app)
           .font(.system(size: 16, weight: .semibold))
-          .foregroundStyle(Color(red: 0.39, green: 0.40, blue: 0.95))
+          .foregroundStyle(RepoRadarColors.statusIndigo)
       }
+      .accessibilityHidden(true)
 
       VStack(alignment: .leading, spacing: 1) {
         Text("Repo Radar")
@@ -226,6 +231,7 @@ public struct PopoverContentView: View {
           .font(.system(size: 11))
           .foregroundStyle(subtitleColor)
       }
+      .accessibilityElement(children: .combine)
 
       Spacer()
 
@@ -244,6 +250,7 @@ public struct PopoverContentView: View {
       .buttonStyle(.plain)
       .disabled(isRefreshing || state == .setup)
       .accessibilityLabel("Refresh now")
+      .help("Refresh now")
     }
     .padding(.horizontal, 14)
     .padding(.top, 14)
@@ -290,9 +297,9 @@ public struct PopoverContentView: View {
   private var subtitleColor: Color {
     switch state {
     case .token, .error:
-      return .red
+      return RepoRadarColors.statusFailText
     case .offline:
-      return .orange
+      return RepoRadarColors.statusStaleText
     default:
       return .secondary
     }
@@ -303,6 +310,7 @@ public struct PopoverContentView: View {
   private func bannerView(
     icon: String,
     iconColor: Color,
+    textColor: Color,
     title: String,
     bodyText: String,
     actionTitle: String?,
@@ -314,11 +322,12 @@ public struct PopoverContentView: View {
         .foregroundStyle(iconColor)
         .frame(width: 16, height: 16)
         .padding(.top, 1)
+        .accessibilityHidden(true)
 
       VStack(alignment: .leading, spacing: 3) {
         Text(title)
           .font(.system(size: 12, weight: .semibold))
-          .foregroundStyle(iconColor)
+          .foregroundStyle(textColor)
 
         Text(bodyText)
           .font(.system(size: 11))
@@ -359,21 +368,21 @@ public struct PopoverContentView: View {
         chipTile(count: "-", label: "reviews", tint: Color.primary.opacity(0.06), textColor: .secondary)
         chipTile(count: "-", label: "stale", tint: Color.primary.opacity(0.06), textColor: .secondary)
       } else if state == .clear {
-        chipTile(count: "✓", label: "CI passing", tint: Color.green.opacity(0.14), textColor: .green)
-        chipTile(count: "\(myPRsCount)", label: "my PRs", tint: Color.indigo.opacity(0.14), textColor: Color(red: 0.39, green: 0.40, blue: 0.95))
-        chipTile(count: "\(reviewsCount)", label: "reviews", tint: Color.purple.opacity(0.14), textColor: .purple)
-        chipTile(count: "\(staleBranches.count)", label: "stale", tint: Color.orange.opacity(0.14), textColor: .orange)
+        chipTile(count: "✓", label: "CI passing", tint: RepoRadarColors.statusPass.opacity(0.14), textColor: RepoRadarColors.statusPassText, accessibilityValue: "All")
+        chipTile(count: "\(myPRsCount)", label: "my PRs", tint: RepoRadarColors.statusIndigo.opacity(0.14), textColor: RepoRadarColors.statusIndigoText)
+        chipTile(count: "\(reviewsCount)", label: "reviews", tint: RepoRadarColors.statusReview.opacity(0.14), textColor: RepoRadarColors.statusReviewText)
+        chipTile(count: "\(staleBranches.count)", label: "stale", tint: RepoRadarColors.statusStale.opacity(0.14), textColor: RepoRadarColors.statusStaleText)
       } else {
-        chipTile(count: "\(failingCI.count)", label: "failing", tint: Color.red.opacity(0.14), textColor: .red)
-        chipTile(count: "\(myPRsCount)", label: "my PRs", tint: Color.indigo.opacity(0.14), textColor: Color(red: 0.39, green: 0.40, blue: 0.95))
-        chipTile(count: "\(reviewsCount)", label: "review", tint: Color.purple.opacity(0.14), textColor: .purple)
-        chipTile(count: "\(staleBranches.count)", label: "stale", tint: Color.orange.opacity(0.14), textColor: .orange)
+        chipTile(count: "\(failingCI.count)", label: "failing", tint: RepoRadarColors.statusFail.opacity(0.14), textColor: RepoRadarColors.statusFailText)
+        chipTile(count: "\(myPRsCount)", label: "my PRs", tint: RepoRadarColors.statusIndigo.opacity(0.14), textColor: RepoRadarColors.statusIndigoText)
+        chipTile(count: "\(reviewsCount)", label: "review", tint: RepoRadarColors.statusReview.opacity(0.14), textColor: RepoRadarColors.statusReviewText)
+        chipTile(count: "\(staleBranches.count)", label: "stale", tint: RepoRadarColors.statusStale.opacity(0.14), textColor: RepoRadarColors.statusStaleText)
       }
     }
     .padding(.horizontal, 12)
   }
 
-  private func chipTile(count: String, label: String, tint: Color, textColor: Color) -> some View {
+  private func chipTile(count: String, label: String, tint: Color, textColor: Color, accessibilityValue: String? = nil) -> some View {
     VStack(alignment: .leading, spacing: 2) {
       Text(count)
         .font(.system(size: 17, weight: .bold))
@@ -387,6 +396,8 @@ public struct PopoverContentView: View {
     .padding(.horizontal, 8)
     .padding(.vertical, 7)
     .background(tint, in: RoundedRectangle(cornerRadius: 8))
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel("\(accessibilityValue ?? count) \(label)")
   }
 
   // MARK: - Sections
@@ -409,7 +420,7 @@ public struct PopoverContentView: View {
     VStack(alignment: .leading, spacing: 3) {
       sectionHeader(
         icon: isWaitingForFirstRefresh ? "arrow.clockwise" : (state == .clear ? "checkmark.circle.fill" : "xmark.circle.fill"),
-        iconColor: isWaitingForFirstRefresh ? .secondary : (state == .clear ? .green : .red),
+        iconColor: isWaitingForFirstRefresh ? .secondary : (state == .clear ? RepoRadarColors.statusPass : RepoRadarColors.statusFail),
         title: state == .clear || isWaitingForFirstRefresh ? "CI" : "FAILING CI",
         count: isWaitingForFirstRefresh || state == .clear ? 0 : failingCI.count + runningCI.count
       )
@@ -420,7 +431,8 @@ public struct PopoverContentView: View {
           iconColor: .secondary,
           title: "Waiting for first refresh…",
           meta: "Checking \(repoCount) watched repositories",
-          url: nil
+          url: nil,
+          accessibilityLabelText: "CI, Waiting for first refresh, Checking \(repoCount) watched repositories"
         )
       } else if state == .clear {
         let checkedText: String = {
@@ -429,22 +441,30 @@ public struct PopoverContentView: View {
           }
           return "checked just now"
         }()
+        let spokenCheckedText: String = {
+          if let lastUpdated {
+            return "checked \(WidgetSnapshot.spokenRelativeTimeString(from: lastUpdated))"
+          }
+          return "checked just now"
+        }()
 
         PopoverRowView(
           icon: "checkmark.circle.fill",
-          iconColor: .green,
+          iconColor: RepoRadarColors.statusPass,
           title: "All \(repoCount) repos passing",
           meta: "Default branches and your PRs · \(checkedText)",
-          url: nil
+          url: nil,
+          accessibilityLabelText: "CI passing, All \(repoCount) repos passing, Default branches and your PRs, \(spokenCheckedText)"
         )
       } else {
         ForEach(failingCI) { item in
           PopoverRowView(
             icon: "xmark.circle.fill",
-            iconColor: .red,
+            iconColor: RepoRadarColors.statusFail,
             title: "\(item.repo) · \(item.ref)",
             meta: "\(item.check) · failed \(relativeTimeString(from: item.completedAt ?? Date()))",
-            url: item.url
+            url: item.url,
+            accessibilityLabelText: item.accessibilityLabel()
           )
         }
 
@@ -454,7 +474,8 @@ public struct PopoverContentView: View {
             iconColor: .secondary,
             title: "\(item.repo) · \(item.ref)",
             meta: "\(item.check) · running \(durationString(from: item.startedAt ?? Date()))",
-            url: item.url
+            url: item.url,
+            accessibilityLabelText: item.accessibilityLabel()
           )
         }
       }
@@ -465,7 +486,7 @@ public struct PopoverContentView: View {
     VStack(alignment: .leading, spacing: 3) {
       sectionHeader(
         icon: "arrow.triangle.pull",
-        iconColor: Color(red: 0.39, green: 0.40, blue: 0.95),
+        iconColor: RepoRadarColors.statusIndigo,
         title: "PULL REQUESTS",
         count: pullRequests.count
       )
@@ -488,12 +509,13 @@ public struct PopoverContentView: View {
           let isReview = pr.reason == .reviewRequested
           PopoverRowView(
             icon: isReview ? "eye" : "arrow.triangle.pull",
-            iconColor: isReview ? .purple : Color(red: 0.39, green: 0.40, blue: 0.95),
+            iconColor: isReview ? RepoRadarColors.statusReview : RepoRadarColors.statusIndigo,
             title: pr.title,
             meta: isReview
               ? "\(pr.repo) #\(pr.number) · review requested · \(relativeTimeString(from: pr.updatedAt))"
               : "\(pr.repo) #\(pr.number) · \(relativeTimeString(from: pr.updatedAt))",
-            url: pr.url
+            url: pr.url,
+            accessibilityLabelText: pr.accessibilityLabel()
           )
         }
       }
@@ -504,7 +526,7 @@ public struct PopoverContentView: View {
     VStack(alignment: .leading, spacing: 3) {
       sectionHeader(
         icon: "arrow.triangle.branch",
-        iconColor: .orange,
+        iconColor: RepoRadarColors.statusStale,
         title: "STALE BRANCHES",
         count: staleBranches.count
       )
@@ -527,10 +549,11 @@ public struct PopoverContentView: View {
           let branchURL = WidgetGitHubURL.url(for: item)
           PopoverRowView(
             icon: "arrow.triangle.branch",
-            iconColor: .orange,
+            iconColor: RepoRadarColors.statusStale,
             title: item.branch,
             meta: "\(item.repo) · \(item.ageDays) days",
-            url: branchURL
+            url: branchURL,
+            accessibilityLabelText: item.accessibilityLabel
           )
         }
 
@@ -540,11 +563,16 @@ public struct PopoverContentView: View {
           } label: {
             Text(showAllStale ? "Show less" : "Show \(staleBranches.count - 2) more")
               .font(.system(size: 12, weight: .medium))
-              .foregroundStyle(Color(red: 0.39, green: 0.40, blue: 0.95))
+              .foregroundStyle(RepoRadarColors.statusIndigoText)
               .padding(.leading, 32)
               .padding(.vertical, 2)
           }
           .buttonStyle(.plain)
+          .accessibilityLabel(
+            showAllStale
+              ? "Show fewer stale branches"
+              : "Show \(staleBranches.count - 2) more stale branches"
+          )
         }
       }
     }
@@ -556,6 +584,7 @@ public struct PopoverContentView: View {
         .font(.system(size: 11, weight: .bold))
         .foregroundStyle(iconColor)
         .frame(width: 14, height: 14)
+        .accessibilityHidden(true)
 
       Text(title)
         .font(.system(size: 11, weight: .semibold))
@@ -572,6 +601,9 @@ public struct PopoverContentView: View {
     }
     .padding(.horizontal, 8)
     .frame(height: 20)
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel("\(title), \(count)")
+    .accessibilityAddTraits(.isHeader)
   }
 
   // MARK: - Welcome / Setup View
@@ -582,12 +614,13 @@ public struct PopoverContentView: View {
 
       ZStack {
         RoundedRectangle(cornerRadius: 14, style: .continuous)
-          .fill(Color.indigo.opacity(0.14))
+          .fill(RepoRadarColors.statusIndigo.opacity(0.14))
           .frame(width: 56, height: 56)
         Image(systemName: AppSymbol.app)
           .font(.system(size: 30, weight: .semibold))
-          .foregroundStyle(Color(red: 0.39, green: 0.40, blue: 0.95))
+          .foregroundStyle(RepoRadarColors.statusIndigo)
       }
+      .accessibilityHidden(true)
 
       Text("Welcome to Repo Radar")
         .font(.system(size: 15, weight: .semibold))
@@ -613,7 +646,8 @@ public struct PopoverContentView: View {
       if let tokenURL = URL(string: "https://github.com/settings/personal-access-tokens/new") {
         Link("How to create a token ↗", destination: tokenURL)
           .font(.system(size: 12, weight: .medium))
-          .foregroundStyle(Color(red: 0.39, green: 0.40, blue: 0.95))
+          .foregroundStyle(RepoRadarColors.statusIndigoText)
+          .accessibilityLabel("How to create a GitHub token, opens in browser")
       }
 
       Spacer(minLength: 24)
@@ -630,16 +664,19 @@ public struct PopoverContentView: View {
           Image(systemName: "slider.horizontal.3")
             .font(.system(size: 12))
             .foregroundStyle(.secondary)
+            .accessibilityHidden(true)
           Text("Settings…")
             .font(.system(size: 13))
           Text("⌘,")
             .font(.system(size: 12))
             .foregroundStyle(.secondary)
+            .accessibilityHidden(true)
         }
         .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
       .keyboardShortcut(",", modifiers: .command)
+      .accessibilityLabel("Settings")
 
       Spacer()
 
@@ -654,11 +691,13 @@ public struct PopoverContentView: View {
           Text("⌘Q")
             .font(.system(size: 12))
             .foregroundStyle(.secondary)
+            .accessibilityHidden(true)
         }
         .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
       .keyboardShortcut("q", modifiers: .command)
+      .accessibilityLabel("Quit Repo Radar")
     }
     .padding(.horizontal, 14)
     .padding(.vertical, 8)
@@ -696,52 +735,73 @@ private struct PopoverRowView: View {
   let title: String
   let meta: String
   let url: URL?
+  var accessibilityLabelText: String? = nil
 
   @State private var isHovered = false
 
+  private var resolvedAccessibilityLabel: String {
+    if let accessibilityLabelText, !accessibilityLabelText.isEmpty {
+      return accessibilityLabelText
+    }
+    return "\(title), \(meta)"
+  }
+
   var body: some View {
-    Button {
-      if let url {
+    if let url {
+      Button {
         #if canImport(AppKit)
         NSWorkspace.shared.open(url)
         #endif
+      } label: {
+        rowContent
       }
-    } label: {
-      HStack(spacing: 8) {
-        Image(systemName: icon)
-          .font(.system(size: 13))
-          .foregroundStyle(iconColor)
-          .frame(width: 16, height: 16)
-
-        VStack(alignment: .leading, spacing: 1) {
-          Text(title)
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(.primary)
-            .lineLimit(1)
-            .truncationMode(.tail)
-
-          Text(meta)
-            .font(.system(size: 11))
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .truncationMode(.tail)
-        }
-
-        Spacer(minLength: 4)
-
-        if isHovered && url != nil {
-          Image(systemName: "arrow.up.right")
-            .font(.system(size: 11))
-            .foregroundStyle(.secondary)
-        }
-      }
-      .padding(.horizontal, 8)
-      .padding(.vertical, 5)
-      .background(isHovered ? Color.primary.opacity(0.06) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
-      .contentShape(RoundedRectangle(cornerRadius: 6))
+      .buttonStyle(.plain)
+      .onHover { isHovered = $0 }
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel(resolvedAccessibilityLabel)
+      .accessibilityAddTraits([.isButton, .isLink])
+    } else {
+      rowContent
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(resolvedAccessibilityLabel)
     }
-    .buttonStyle(.plain)
-    .onHover { isHovered = $0 }
+  }
+
+  private var rowContent: some View {
+    HStack(spacing: 8) {
+      Image(systemName: icon)
+        .font(.system(size: 13))
+        .foregroundStyle(iconColor)
+        .frame(width: 16, height: 16)
+        .accessibilityHidden(true)
+
+      VStack(alignment: .leading, spacing: 1) {
+        Text(title)
+          .font(.system(size: 13, weight: .medium))
+          .foregroundStyle(.primary)
+          .lineLimit(1)
+          .truncationMode(.tail)
+
+        Text(meta)
+          .font(.system(size: 11))
+          .foregroundStyle(.secondary)
+          .lineLimit(1)
+          .truncationMode(.tail)
+      }
+
+      Spacer(minLength: 4)
+
+      if isHovered && url != nil {
+        Image(systemName: "arrow.up.right")
+          .font(.system(size: 11))
+          .foregroundStyle(.secondary)
+          .accessibilityHidden(true)
+      }
+    }
+    .padding(.horizontal, 8)
+    .padding(.vertical, 5)
+    .background(isHovered && url != nil ? Color.primary.opacity(0.06) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+    .contentShape(RoundedRectangle(cornerRadius: 6))
   }
 }
 

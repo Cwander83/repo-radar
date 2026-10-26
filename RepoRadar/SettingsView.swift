@@ -178,7 +178,8 @@ public struct GeneralSettingsView: View {
         if viewModel.launchAtLoginStatus == .requiresApproval {
           HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
-              .foregroundStyle(.orange)
+              .foregroundStyle(RepoRadarColors.statusStale)
+              .accessibilityHidden(true)
             Text("Requires approval in System Settings")
               .font(.caption)
               .foregroundStyle(.secondary)
@@ -188,13 +189,14 @@ public struct GeneralSettingsView: View {
             }
             .buttonStyle(.link)
             .font(.caption)
+            .accessibilityLabel("Open Login Items in System Settings")
           }
         }
 
         if let error = viewModel.launchAtLoginError {
           Text(error)
             .font(.caption)
-            .foregroundStyle(.red)
+            .foregroundStyle(RepoRadarColors.statusFailText)
         }
 
         Toggle("Show failing-CI count in the menu bar", isOn: $viewModel.showMenuBarCount)
@@ -206,7 +208,8 @@ public struct GeneralSettingsView: View {
         if viewModel.ciNotifications && viewModel.isNotificationPermissionDenied {
           HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
-              .foregroundStyle(.orange)
+              .foregroundStyle(RepoRadarColors.statusStale)
+              .accessibilityHidden(true)
             Text("Notifications are off for RepoRadar in System Settings")
               .font(.caption)
               .foregroundStyle(.secondary)
@@ -216,6 +219,7 @@ public struct GeneralSettingsView: View {
             }
             .buttonStyle(.link)
             .font(.caption)
+            .accessibilityLabel("Open Notifications in System Settings")
           }
         }
       } footer: {
@@ -359,31 +363,40 @@ public struct RepositoriesSettingsView: View {
 
   private func repositoryRow(_ repo: String) -> some View {
     let status = viewModel.accessStatus(for: repo)
+    let branch = viewModel.defaultBranch(for: repo)
 
     return HStack(spacing: 8) {
-      repoNameView(repo)
+      HStack(spacing: 8) {
+        repoNameView(repo)
 
-      Spacer()
+        Spacer()
 
-      if let branch = viewModel.defaultBranch(for: repo) {
-        Text(branch)
-          .font(.system(size: 11))
-          .padding(.horizontal, 6)
-          .padding(.vertical, 1)
-          .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 4))
-          .foregroundStyle(.secondary)
+        if let branch {
+          Text(branch)
+            .font(.system(size: 11))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 1)
+            .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 4))
+            .foregroundStyle(.secondary)
+        }
+
+        HStack(spacing: 4) {
+          Circle()
+            .fill(statusDotColor(for: status))
+            .frame(width: 6, height: 6)
+            .accessibilityHidden(true)
+
+          Text(status.displayText)
+            .font(.system(size: 11))
+            .foregroundStyle(statusTextColor(for: status))
+        }
+        .frame(width: 84, alignment: .leading)
       }
-
-      HStack(spacing: 4) {
-        Circle()
-          .fill(statusDotColor(for: status))
-          .frame(width: 6, height: 6)
-
-        Text(status.displayText)
-          .font(.system(size: 11))
-          .foregroundStyle(statusTextColor(for: status))
-      }
-      .frame(width: 84, alignment: .leading)
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel(
+        branch.map { "\(repo), default branch \($0), \(status.displayText)" }
+          ?? "\(repo), \(status.displayText)"
+      )
 
       Button {
         viewModel.removeRepository(repo)
@@ -391,9 +404,12 @@ public struct RepositoriesSettingsView: View {
         Image(systemName: "minus.circle")
           .font(.system(size: 13))
           .foregroundStyle(.secondary)
+          .frame(width: 22, height: 22)
+          .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
       .accessibilityLabel("Remove \(repo)")
+      .help("Remove \(repo)")
     }
     .padding(.vertical, 2)
   }
@@ -401,9 +417,9 @@ public struct RepositoriesSettingsView: View {
   private func statusDotColor(for status: RepoAccessStatus) -> Color {
     switch status {
     case .ok:
-      return .green
+      return RepoRadarColors.statusPass
     case .noAccess:
-      return .red
+      return RepoRadarColors.statusFail
     case .checking:
       return .gray
     }
@@ -414,7 +430,7 @@ public struct RepositoriesSettingsView: View {
     case .ok, .checking:
       return .secondary
     case .noAccess:
-      return .red
+      return RepoRadarColors.statusFailText
     }
   }
 
@@ -442,6 +458,7 @@ public struct RepositoriesSettingsView: View {
         TextField("owner/repo", text: $viewModel.newRepoInput)
           .textFieldStyle(.roundedBorder)
           .font(.system(size: 13))
+          .accessibilityLabel("Add repository (owner/repo)")
           .onSubmit {
             viewModel.addRepository()
           }
@@ -450,12 +467,13 @@ public struct RepositoriesSettingsView: View {
           viewModel.addRepository()
         }
         .disabled(viewModel.newRepoInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        .accessibilityLabel("Add repository")
       }
 
       if let error = viewModel.errorMessage {
         Text(error)
           .font(.system(size: 11))
-          .foregroundStyle(.red)
+          .foregroundStyle(RepoRadarColors.statusFailText)
       }
     }
     .padding(.vertical, 2)
@@ -520,11 +538,12 @@ public struct GitHubSettingsView: View {
       HStack(alignment: .center, spacing: 10) {
         Image(systemName: "exclamationmark.triangle.fill")
           .font(.system(size: 16))
-          .foregroundStyle(Color.red)
+          .foregroundStyle(RepoRadarColors.statusFail)
+          .accessibilityHidden(true)
 
         Text(viewModel.expiredBannerText)
           .font(.system(size: 12))
-          .foregroundStyle(Color.red)
+          .foregroundStyle(RepoRadarColors.statusFailText)
           .lineLimit(2)
 
         Spacer()
@@ -546,6 +565,7 @@ public struct GitHubSettingsView: View {
           SecureField("github_pat_...", text: $viewModel.tokenInput)
             .textFieldStyle(.roundedBorder)
             .font(.system(size: 13))
+            .accessibilityLabel("GitHub personal access token")
             .disabled(viewModel.isValidating)
             .onSubmit {
               Task {
@@ -556,6 +576,7 @@ public struct GitHubSettingsView: View {
           if viewModel.isValidating {
             ProgressView()
               .controlSize(.small)
+              .accessibilityLabel("Validating token")
           }
 
           Button("Save") {
@@ -576,7 +597,7 @@ public struct GitHubSettingsView: View {
         if let error = viewModel.validationError {
           Text(error)
             .font(.system(size: 11))
-            .foregroundStyle(.red)
+            .foregroundStyle(RepoRadarColors.statusFailText)
         }
       }
       .padding(.vertical, 2)
@@ -599,6 +620,7 @@ public struct GitHubSettingsView: View {
           .font(.system(size: 16))
           .foregroundStyle(.secondary)
           .frame(width: 20)
+          .accessibilityHidden(true)
 
         VStack(alignment: .leading, spacing: 1) {
           Text("Fine-grained token")
@@ -613,6 +635,7 @@ public struct GitHubSettingsView: View {
         statusPill
       }
       .padding(.vertical, 2)
+      .accessibilityElement(children: .combine)
 
       // Facts rows
       factRow(label: "Account", value: viewModel.account ?? "—", isRed: false)
@@ -628,22 +651,23 @@ public struct GitHubSettingsView: View {
       }
 
       // Actions row
-      HStack {
+      HStack(spacing: 8) {
         Spacer()
 
-        Button("Remove Token") {
+        Button(role: .destructive) {
           viewModel.removeToken()
+        } label: {
+          Text("Remove Token")
+            .foregroundStyle(RepoRadarColors.statusFailText)
         }
+        .buttonStyle(.bordered)
         .font(.system(size: 13))
-        .foregroundStyle(.red)
-        .buttonStyle(.plain)
 
         Button("Replace Token…") {
           viewModel.beginReplacingToken()
         }
+        .buttonStyle(.bordered)
         .font(.system(size: 13))
-        .buttonStyle(.plain)
-        .padding(.leading, 8)
       }
       .padding(.vertical, 4)
     } header: {
@@ -665,9 +689,9 @@ public struct GitHubSettingsView: View {
   private var statusPillBackground: Color {
     switch viewModel.status {
     case .valid:
-      return Color.green.opacity(0.14)
+      return RepoRadarColors.statusPass.opacity(0.14)
     case .expired, .invalid:
-      return Color.red.opacity(0.16)
+      return RepoRadarColors.statusFail.opacity(0.16)
     case .missing:
       return Color.secondary.opacity(0.12)
     }
@@ -676,9 +700,9 @@ public struct GitHubSettingsView: View {
   private var statusPillForeground: Color {
     switch viewModel.status {
     case .valid:
-      return Color.green
+      return RepoRadarColors.statusPassText
     case .expired, .invalid:
-      return Color.red
+      return RepoRadarColors.statusFailText
     case .missing:
       return Color.secondary
     }
@@ -692,9 +716,11 @@ public struct GitHubSettingsView: View {
       Spacer()
       Text(value)
         .font(.system(size: 13))
-        .foregroundStyle(isRed ? Color.red : Color.primary)
+        .foregroundStyle(isRed ? RepoRadarColors.statusFailText : Color.primary)
     }
     .padding(.vertical, 1)
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel("\(label), \(value)")
   }
 
   private var permissionsSection: some View {
@@ -709,6 +735,8 @@ public struct GitHubSettingsView: View {
 
         Link("Create a token on GitHub ↗", destination: URL(string: "https://github.com/settings/personal-access-tokens/new")!)
           .font(.system(size: 12, weight: .medium))
+          .foregroundStyle(RepoRadarColors.statusIndigoText)
+          .accessibilityLabel("Create a token on GitHub, opens in browser")
       }
       .padding(.vertical, 4)
     } footer: {
@@ -776,7 +804,7 @@ public struct RepositoryPickerSheet: View {
       Spacer()
       Text(viewModel.selectionCounterText)
         .font(.system(size: 12, weight: viewModel.isAtCap ? .semibold : .regular))
-        .foregroundStyle(viewModel.isAtCap ? .orange : .secondary)
+        .foregroundStyle(viewModel.isAtCap ? RepoRadarColors.statusStaleText : .secondary)
     }
   }
 
@@ -785,9 +813,11 @@ public struct RepositoryPickerSheet: View {
       HStack(spacing: 8) {
         Image(systemName: "magnifyingglass")
           .foregroundStyle(.secondary)
+          .accessibilityHidden(true)
         TextField("Filter repositories…", text: $viewModel.searchQuery)
           .textFieldStyle(.plain)
           .font(.system(size: 13))
+          .accessibilityLabel("Filter repositories")
         if !viewModel.searchQuery.isEmpty {
           Button {
             viewModel.searchQuery = ""
@@ -796,6 +826,7 @@ public struct RepositoryPickerSheet: View {
               .foregroundStyle(.secondary)
           }
           .buttonStyle(.plain)
+          .accessibilityLabel("Clear filter")
         }
       }
       .padding(6)
@@ -807,12 +838,14 @@ public struct RepositoryPickerSheet: View {
         }
         .buttonStyle(.plain)
         .font(.system(size: 11))
-        .foregroundStyle(Color.accentColor)
+        .foregroundStyle(RepoRadarColors.statusIndigoText)
         .disabled(viewModel.isLoading || viewModel.allRepositories.isEmpty)
+        .accessibilityLabel("Select all repositories")
 
         Text("•")
           .font(.system(size: 10))
           .foregroundStyle(.secondary)
+          .accessibilityHidden(true)
 
         Button("Select none") {
           viewModel.selectNone()
@@ -821,6 +854,7 @@ public struct RepositoryPickerSheet: View {
         .font(.system(size: 11))
         .foregroundStyle(.secondary)
         .disabled(viewModel.isLoading || viewModel.selectedRepos.isEmpty)
+        .accessibilityLabel("Deselect all repositories")
 
         Spacer()
 
@@ -834,14 +868,16 @@ public struct RepositoryPickerSheet: View {
   private var capBanner: some View {
     HStack(spacing: 6) {
       Image(systemName: "info.circle.fill")
-        .foregroundStyle(.orange)
+        .foregroundStyle(RepoRadarColors.statusStale)
+        .accessibilityHidden(true)
       Text(viewModel.capExplanation)
         .font(.system(size: 11))
         .foregroundStyle(.secondary)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(8)
-    .background(Color.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
+    .background(RepoRadarColors.statusStale.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
+    .accessibilityElement(children: .combine)
   }
 
   private var contentArea: some View {
@@ -858,7 +894,8 @@ public struct RepositoryPickerSheet: View {
         VStack(spacing: 12) {
           Image(systemName: "exclamationmark.triangle.fill")
             .font(.title2)
-            .foregroundStyle(.red)
+            .foregroundStyle(RepoRadarColors.statusFail)
+            .accessibilityHidden(true)
           Text(error)
             .font(.system(size: 12))
             .multilineTextAlignment(.center)
@@ -877,6 +914,7 @@ public struct RepositoryPickerSheet: View {
           Image(systemName: "lock.shield")
             .font(.system(size: 28))
             .foregroundStyle(.secondary)
+            .accessibilityHidden(true)
           Text("This token can't read any repositories")
             .font(.system(size: 13, weight: .medium))
           Text("Make sure your fine-grained token has repository access permissions.")
@@ -952,6 +990,7 @@ public struct RepositoryPickerSheet: View {
         Image(systemName: isSelected ? "checkmark.square.fill" : "square")
           .font(.system(size: 14))
           .foregroundStyle(isSelected ? Color.accentColor : (canToggle ? Color.secondary : Color.secondary.opacity(0.4)))
+          .accessibilityHidden(true)
 
         repoNameFormatted(repo)
 
@@ -971,6 +1010,10 @@ public struct RepositoryPickerSheet: View {
     .buttonStyle(.plain)
     .disabled(!canToggle)
     .opacity(canToggle ? 1.0 : 0.6)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("\(repo), added manually")
+    .accessibilityValue(isSelected ? "Selected" : "Not selected")
+    .accessibilityAddTraits(.isButton)
   }
 
   private func repositoryPickerRow(_ repo: ViewerRepositoryNode) -> some View {
@@ -984,6 +1027,7 @@ public struct RepositoryPickerSheet: View {
         Image(systemName: isSelected ? "checkmark.square.fill" : "square")
           .font(.system(size: 14))
           .foregroundStyle(isSelected ? Color.accentColor : (canToggle ? Color.secondary : Color.secondary.opacity(0.4)))
+          .accessibilityHidden(true)
 
         repoNameFormatted(repo.nameWithOwner)
 
@@ -992,6 +1036,7 @@ public struct RepositoryPickerSheet: View {
             .font(.system(size: 10))
             .foregroundStyle(.secondary)
             .help("Private repository")
+            .accessibilityHidden(true)
         }
 
         if repo.isArchived {
@@ -1018,6 +1063,20 @@ public struct RepositoryPickerSheet: View {
     .buttonStyle(.plain)
     .disabled(!canToggle)
     .opacity(canToggle ? 1.0 : 0.6)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(pickerRowAccessibilityLabel(for: repo))
+    .accessibilityValue(isSelected ? "Selected" : "Not selected")
+    .accessibilityAddTraits(.isButton)
+  }
+
+  private func pickerRowAccessibilityLabel(for repo: ViewerRepositoryNode) -> String {
+    var parts = [repo.nameWithOwner]
+    if repo.isPrivate { parts.append("private") }
+    if repo.isArchived { parts.append("archived") }
+    if let pushed = repo.pushedAt {
+      parts.append("pushed \(WidgetSnapshot.spokenRelativeTimeString(from: pushed))")
+    }
+    return parts.joined(separator: ", ")
   }
 
   private func repoNameFormatted(_ name: String) -> some View {
