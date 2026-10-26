@@ -375,7 +375,7 @@ private struct SmallWidgetView: View {
       switch entry.state {
       case .firstRun:
         SmallEmptyCardView(
-          icon: "radar",
+          icon: AppSymbol.app,
           iconColor: Color.indigo,
           title: "Repo Radar",
           message: "Open the menu bar app to configure GitHub access."
@@ -499,7 +499,7 @@ private struct SmallDataView: View {
     VStack(alignment: .leading, spacing: 5) {
       // Header
       HStack(spacing: 5) {
-        Image(systemName: "radar")
+        Image(systemName: AppSymbol.app)
           .font(.system(size: 12, weight: .semibold))
           .foregroundStyle(Color.indigo)
           .widgetAccentable()
@@ -723,7 +723,7 @@ private struct SmallAllClearView: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 4) {
       HStack(spacing: 5) {
-        Image(systemName: "radar")
+        Image(systemName: AppSymbol.app)
           .font(.system(size: 12, weight: .semibold))
           .foregroundStyle(Color.indigo)
           .widgetAccentable()
@@ -809,7 +809,7 @@ private struct MediumWidgetView: View {
     switch entry.state {
     case .firstRun:
       MediumEmptyCardView(
-        icon: "radar",
+        icon: AppSymbol.app,
         iconColor: Color.indigo,
         title: "Welcome to Repo Radar",
         subtitle: "Open the menu bar app to configure GitHub access."
@@ -1134,7 +1134,7 @@ private struct MediumEmptyCardView: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
       HStack(spacing: 6) {
-        Image(systemName: "radar")
+        Image(systemName: AppSymbol.app)
           .font(.system(size: 13, weight: .semibold))
           .foregroundStyle(Color.indigo)
           .widgetAccentable()
@@ -1185,7 +1185,7 @@ private struct LargeWidgetView: View {
     switch entry.state {
     case .firstRun:
       LargeEmptyCardView(
-        icon: "radar",
+        icon: AppSymbol.app,
         iconColor: Color.indigo,
         title: "Welcome to Repo Radar",
         description: "Open the menu bar app to configure GitHub access. Your widget fills in after the first refresh."
@@ -1621,7 +1621,7 @@ private struct LargeEmptyCardView: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
       HStack(spacing: 6) {
-        Image(systemName: "radar")
+        Image(systemName: AppSymbol.app)
           .font(.system(size: 14, weight: .semibold))
           .foregroundStyle(Color.indigo)
           .widgetAccentable()

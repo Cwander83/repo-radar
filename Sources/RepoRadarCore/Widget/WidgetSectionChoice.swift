@@ -28,7 +28,7 @@ public enum WidgetSectionChoice: String, AppEnum, Sendable, CaseIterable {
 
   public var iconName: String {
     switch self {
-    case .all: return "radar"
+    case .all: return AppSymbol.app
     case .failingCI: return "xmark.circle.fill"
     case .pullRequests: return "arrow.triangle.pull"
     case .staleBranches: return "arrow.triangle.branch"
