@@ -212,7 +212,7 @@ public struct PopoverContentView: View {
         RoundedRectangle(cornerRadius: 7, style: .continuous)
           .fill(Color.indigo.opacity(0.14))
           .frame(width: 28, height: 28)
-        Image(systemName: "radar")
+        Image(systemName: AppSymbol.app)
           .font(.system(size: 16, weight: .semibold))
           .foregroundStyle(Color(red: 0.39, green: 0.40, blue: 0.95))
       }
@@ -584,7 +584,7 @@ public struct PopoverContentView: View {
         RoundedRectangle(cornerRadius: 14, style: .continuous)
           .fill(Color.indigo.opacity(0.14))
           .frame(width: 56, height: 56)
-        Image(systemName: "radar")
+        Image(systemName: AppSymbol.app)
           .font(.system(size: 30, weight: .semibold))
           .foregroundStyle(Color(red: 0.39, green: 0.40, blue: 0.95))
       }

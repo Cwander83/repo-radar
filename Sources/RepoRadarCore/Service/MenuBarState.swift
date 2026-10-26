@@ -18,7 +18,7 @@ public enum MenuBarState: Equatable, Sendable {
   public var systemImageName: String {
     switch self {
     case .clear, .failing, .offline:
-      return "radar"
+      return AppSymbol.app
     case .error:
       return "exclamationmark.triangle"
     }

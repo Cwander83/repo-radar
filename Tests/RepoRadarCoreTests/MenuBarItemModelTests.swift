@@ -90,13 +90,13 @@ struct MenuBarItemModelTests {
   @Test("MenuBarState properties return expected symbols, dimming, badge, and labels")
   func testMenuBarStateProperties() {
     let clear = MenuBarState.clear
-    #expect(clear.systemImageName == "radar")
+    #expect(clear.systemImageName == AppSymbol.app)
     #expect(clear.isDimmed == false)
     #expect(clear.badgeCount == nil)
     #expect(clear.accessibilityLabel == "Repo Radar: All checks passing")
 
     let failing = MenuBarState.failing(count: 5)
-    #expect(failing.systemImageName == "radar")
+    #expect(failing.systemImageName == AppSymbol.app)
     #expect(failing.isDimmed == false)
     #expect(failing.badgeCount == 5)
     #expect(failing.accessibilityLabel == "Repo Radar: 5 failing checks")
@@ -108,7 +108,7 @@ struct MenuBarItemModelTests {
     #expect(failingZero.badgeCount == nil)
 
     let offline = MenuBarState.offline
-    #expect(offline.systemImageName == "radar")
+    #expect(offline.systemImageName == AppSymbol.app)
     #expect(offline.isDimmed == true)
     #expect(offline.badgeCount == nil)
     #expect(offline.accessibilityLabel == "Repo Radar: Offline")
@@ -121,6 +121,20 @@ struct MenuBarItemModelTests {
   }
 
   #if canImport(AppKit)
+  #if canImport(AppKit)
+  @Test("Every menu bar and widget section symbol exists in SF Symbols (CHR-102)")
+  func testSymbolNamesResolve() {
+    let states: [MenuBarState] = [.clear, .failing(count: 2), .offline, .error]
+    let names = states.map(\.systemImageName) + WidgetSectionChoice.allCases.map(\.iconName)
+    for name in names {
+      #expect(
+        NSImage(systemSymbolName: name, accessibilityDescription: nil) != nil,
+        "Missing SF Symbol: \(name)"
+      )
+    }
+  }
+  #endif
+
   @Test("MenuBarBadgeImage renders valid, non-template image with correct bounds")
   @MainActor
   func testBadgeImageRendering() {
