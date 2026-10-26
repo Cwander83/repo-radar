@@ -148,13 +148,13 @@ extension WidgetDisplayItem {
   var color: Color {
     switch kind {
     case .failingCI:
-      return .red
+      return RepoRadarColors.statusFail
     case .runningCI:
       return .secondary
     case .pullRequest(let isReviewRequested):
-      return isReviewRequested ? .purple : Color(red: 0.39, green: 0.40, blue: 0.95)
+      return isReviewRequested ? RepoRadarColors.statusReview : RepoRadarColors.statusIndigo
     case .staleBranch:
-      return .orange
+      return RepoRadarColors.statusStale
     }
   }
 }
@@ -162,13 +162,13 @@ extension WidgetDisplayItem {
 private func sectionColor(_ section: WidgetSectionChoice) -> Color {
   switch section {
   case .all:
-    return Color.indigo
+    return RepoRadarColors.statusIndigo
   case .failingCI:
-    return .red
+    return RepoRadarColors.statusFail
   case .pullRequests:
-    return Color(red: 0.39, green: 0.40, blue: 0.95)
+    return RepoRadarColors.statusIndigo
   case .staleBranches:
-    return .orange
+    return RepoRadarColors.statusStale
   }
 }
 
@@ -201,18 +201,27 @@ private struct MetricTile: View {
   let title: String
   let count: Int
   let color: Color
+  let textColor: Color
   let isAlert: Bool
+
+  init(title: String, count: Int, color: Color, textColor: Color? = nil, isAlert: Bool) {
+    self.title = title
+    self.count = count
+    self.color = color
+    self.textColor = textColor ?? color
+    self.isAlert = isAlert
+  }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 2) {
       Text("\(count)")
         .font(.system(size: 16, weight: .bold))
-        .foregroundStyle(isAlert ? color : .primary)
+        .foregroundStyle(isAlert ? textColor : .primary)
         .widgetAccentable(isAlert)
 
       Text(title)
         .font(.system(size: 9.5, weight: .medium))
-        .foregroundStyle(isAlert ? color : .secondary)
+        .foregroundStyle(isAlert ? textColor : .secondary)
         .widgetAccentable(isAlert)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
@@ -227,6 +236,8 @@ private struct MetricTile: View {
         .stroke(isAlert ? color.opacity(0.3) : Color.clear, lineWidth: 1)
         .widgetAccentable(isAlert)
     )
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel("\(count) \(title)")
   }
 }
 
@@ -234,18 +245,27 @@ private struct MetricPill: View {
   let count: Int
   let label: String
   let color: Color
+  let textColor: Color
   let isAlert: Bool
+
+  init(count: Int, label: String, color: Color, textColor: Color? = nil, isAlert: Bool) {
+    self.count = count
+    self.label = label
+    self.color = color
+    self.textColor = textColor ?? color
+    self.isAlert = isAlert
+  }
 
   var body: some View {
     HStack(spacing: 3) {
       Text("\(count)")
         .font(.system(size: 10.5, weight: .bold))
-        .foregroundStyle(isAlert ? color : .primary)
+        .foregroundStyle(isAlert ? textColor : .primary)
         .widgetAccentable(isAlert)
 
       Text(label)
         .font(.system(size: 9, weight: .medium))
-        .foregroundStyle(isAlert ? color : .secondary)
+        .foregroundStyle(isAlert ? textColor : .secondary)
         .widgetAccentable(isAlert)
     }
     .padding(.horizontal, 5)
@@ -259,6 +279,8 @@ private struct MetricPill: View {
         .stroke(isAlert ? color.opacity(0.3) : Color.clear, lineWidth: 0.75)
         .widgetAccentable(isAlert)
     )
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel("\(count) \(label)")
   }
 }
 
@@ -270,6 +292,14 @@ private struct WidgetRowView: View {
   var metaPrefix: String? = nil
   var timestamp: Date? = nil
   var url: URL? = nil
+  var accessibilityLabelText: String? = nil
+
+  private var resolvedAccessibilityLabel: String {
+    if let accessibilityLabelText, !accessibilityLabelText.isEmpty {
+      return accessibilityLabelText
+    }
+    return meta.isEmpty ? title : "\(title), \(meta)"
+  }
 
   var body: some View {
     if let url {
@@ -277,8 +307,13 @@ private struct WidgetRowView: View {
         rowContent
       }
       .buttonStyle(.plain)
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel(resolvedAccessibilityLabel)
+      .accessibilityAddTraits(.isLink)
     } else {
       rowContent
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(resolvedAccessibilityLabel)
     }
   }
 
@@ -289,6 +324,7 @@ private struct WidgetRowView: View {
         .foregroundStyle(iconColor)
         .frame(width: 14, height: 14)
         .widgetAccentable()
+        .accessibilityHidden(true)
 
       VStack(alignment: .leading, spacing: 1) {
         Text(title)
@@ -339,6 +375,7 @@ private struct WidgetSectionHeader: View {
         .foregroundStyle(iconColor)
         .frame(width: 12, height: 12)
         .widgetAccentable()
+        .accessibilityHidden(true)
 
       Text(title)
         .font(.system(size: 9.5, weight: .semibold))
@@ -354,6 +391,9 @@ private struct WidgetSectionHeader: View {
         .background(Color.primary.opacity(0.06), in: Capsule())
     }
     .frame(height: 16)
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel("\(title), \(count)")
+    .accessibilityAddTraits(.isHeader)
   }
 }
 
@@ -376,7 +416,7 @@ private struct SmallWidgetView: View {
       case .firstRun:
         SmallEmptyCardView(
           icon: AppSymbol.app,
-          iconColor: Color.indigo,
+          iconColor: RepoRadarColors.statusIndigo,
           title: "Repo Radar",
           message: "Open the menu bar app to configure GitHub access."
         )
@@ -384,7 +424,7 @@ private struct SmallWidgetView: View {
       case .noRepos:
         SmallEmptyCardView(
           icon: "book.closed",
-          iconColor: Color.indigo,
+          iconColor: RepoRadarColors.statusIndigo,
           title: "No Repositories",
           message: "Add repositories to watch in Settings."
         )
@@ -392,16 +432,17 @@ private struct SmallWidgetView: View {
       case .tokenError(let detail):
         SmallEmptyCardView(
           icon: "key.fill",
-          iconColor: .red,
+          iconColor: RepoRadarColors.statusFail,
           title: "Auth Error",
           message: detail,
-          actionHint: "Update in Settings…"
+          actionHint: "Update in Settings…",
+          isAlert: true
         )
 
       case .error(let detail):
         SmallEmptyCardView(
           icon: "exclamationmark.triangle.fill",
-          iconColor: .orange,
+          iconColor: RepoRadarColors.statusStale,
           title: "Error",
           message: detail
         )
@@ -471,7 +512,7 @@ private struct SmallWidgetView: View {
         } else {
           SmallEmptyCardView(
             icon: "hourglass",
-            iconColor: .orange,
+            iconColor: RepoRadarColors.statusStale,
             title: "Rate Limited",
             message: rateLimitNotice(resetAt: resetAt, detail: detail)
           )
@@ -501,8 +542,9 @@ private struct SmallDataView: View {
       HStack(spacing: 5) {
         Image(systemName: AppSymbol.app)
           .font(.system(size: 12, weight: .semibold))
-          .foregroundStyle(Color.indigo)
+          .foregroundStyle(RepoRadarColors.statusIndigo)
           .widgetAccentable()
+          .accessibilityHidden(true)
         Text(headerTitle)
           .font(.system(size: 12.5, weight: .semibold))
           .foregroundStyle(isDimmed ? .secondary : .primary)
@@ -517,13 +559,15 @@ private struct SmallDataView: View {
           MetricTile(
             title: "Failing",
             count: snapshot.failingCI.count,
-            color: .red,
+            color: RepoRadarColors.statusFail,
+            textColor: RepoRadarColors.statusFailText,
             isAlert: snapshot.failingCI.count > 0
           )
           MetricTile(
             title: "PRs",
             count: snapshot.pullRequests.count,
-            color: Color(red: 0.39, green: 0.40, blue: 0.95),
+            color: RepoRadarColors.statusIndigo,
+            textColor: RepoRadarColors.statusIndigoText,
             isAlert: false
           )
         }
@@ -531,13 +575,15 @@ private struct SmallDataView: View {
           MetricTile(
             title: "Reviews",
             count: snapshot.pullRequests.filter { $0.isReviewRequested }.count,
-            color: .purple,
+            color: RepoRadarColors.statusReview,
+            textColor: RepoRadarColors.statusReviewText,
             isAlert: snapshot.pullRequests.contains { $0.isReviewRequested }
           )
           MetricTile(
             title: "Stale",
             count: snapshot.staleBranches.count,
-            color: .orange,
+            color: RepoRadarColors.statusStale,
+            textColor: RepoRadarColors.statusStaleText,
             isAlert: false
           )
         }
@@ -552,17 +598,18 @@ private struct SmallDataView: View {
           HStack(spacing: 3) {
             Image(systemName: "exclamationmark.triangle.fill")
               .font(.system(size: 8))
-              .foregroundStyle(.orange)
+              .foregroundStyle(RepoRadarColors.statusStale)
               .widgetAccentable()
+              .accessibilityHidden(true)
             Text(footerText)
               .font(.system(size: 8.5))
-              .foregroundStyle(.orange)
+              .foregroundStyle(RepoRadarColors.statusStaleText)
               .lineLimit(1)
           }
         } else {
           Text("Updated \(timeString(from: snapshot.updatedAt))")
             .font(.system(size: 9))
-            .foregroundStyle(.tertiary)
+            .foregroundStyle(.secondary)
         }
         Spacer(minLength: 0)
       }
@@ -610,6 +657,7 @@ private struct SmallSectionListView: View {
           .font(.system(size: 11, weight: .bold))
           .foregroundStyle(sectionColor(section))
           .widgetAccentable()
+          .accessibilityHidden(true)
 
         Text(headerTitle)
           .font(.system(size: 11.5, weight: .semibold))
@@ -625,6 +673,8 @@ private struct SmallSectionListView: View {
           .padding(.vertical, 0.5)
           .background(Color.primary.opacity(0.06), in: Capsule())
       }
+      .accessibilityElement(children: .combine)
+      .accessibilityLabel("\(headerTitle), \(itemsCount)")
 
       if items.isEmpty {
         Spacer(minLength: 0)
@@ -632,8 +682,9 @@ private struct SmallSectionListView: View {
         VStack(alignment: .leading, spacing: 3) {
           Image(systemName: "checkmark.seal.fill")
             .font(.system(size: 22))
-            .foregroundStyle(.green)
+            .foregroundStyle(RepoRadarColors.statusPass)
             .widgetAccentable()
+            .accessibilityHidden(true)
 
           Text(emptyTitle)
             .font(.system(size: 13, weight: .semibold))
@@ -643,6 +694,7 @@ private struct SmallSectionListView: View {
             .foregroundStyle(.secondary)
             .lineLimit(2)
         }
+        .accessibilityElement(children: .combine)
 
         Spacer(minLength: 0)
       } else {
@@ -654,7 +706,8 @@ private struct SmallSectionListView: View {
               title: item.title,
               meta: item.subtitle,
               metaPrefix: item.subtitlePrefix,
-              timestamp: item.timestamp
+              timestamp: item.timestamp,
+              accessibilityLabelText: item.accessibilityLabel
             )
           }
         }
@@ -669,17 +722,18 @@ private struct SmallSectionListView: View {
           HStack(spacing: 3) {
             Image(systemName: "exclamationmark.triangle.fill")
               .font(.system(size: 8))
-              .foregroundStyle(.orange)
+              .foregroundStyle(RepoRadarColors.statusStale)
               .widgetAccentable()
+              .accessibilityHidden(true)
             Text(footerText)
               .font(.system(size: 8.5))
-              .foregroundStyle(.orange)
+              .foregroundStyle(RepoRadarColors.statusStaleText)
               .lineLimit(1)
           }
         } else {
           Text("Updated \(timeString(from: snapshot.updatedAt))")
             .font(.system(size: 9))
-            .foregroundStyle(.tertiary)
+            .foregroundStyle(.secondary)
         }
         Spacer(minLength: 0)
       }
@@ -725,8 +779,9 @@ private struct SmallAllClearView: View {
       HStack(spacing: 5) {
         Image(systemName: AppSymbol.app)
           .font(.system(size: 12, weight: .semibold))
-          .foregroundStyle(Color.indigo)
+          .foregroundStyle(RepoRadarColors.statusIndigo)
           .widgetAccentable()
+          .accessibilityHidden(true)
         Text(headerTitle)
           .font(.system(size: 12.5, weight: .semibold))
           .lineLimit(1)
@@ -738,8 +793,9 @@ private struct SmallAllClearView: View {
       VStack(alignment: .leading, spacing: 3) {
         Image(systemName: "checkmark.seal.fill")
           .font(.system(size: 24))
-          .foregroundStyle(.green)
+          .foregroundStyle(RepoRadarColors.statusPass)
           .widgetAccentable()
+          .accessibilityHidden(true)
 
         Text("All Clear")
           .font(.system(size: 13.5, weight: .semibold))
@@ -749,13 +805,14 @@ private struct SmallAllClearView: View {
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
       }
+      .accessibilityElement(children: .combine)
 
       Spacer(minLength: 0)
 
       HStack {
         Text("Updated \(timeString(from: snapshot.updatedAt))")
           .font(.system(size: 9))
-          .foregroundStyle(.tertiary)
+          .foregroundStyle(.secondary)
         Spacer()
       }
     }
@@ -768,6 +825,7 @@ private struct SmallEmptyCardView: View {
   let title: String
   let message: String
   var actionHint: String? = nil
+  var isAlert: Bool = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: 4) {
@@ -776,9 +834,10 @@ private struct SmallEmptyCardView: View {
           .font(.system(size: 12, weight: .semibold))
           .foregroundStyle(iconColor)
           .widgetAccentable()
+          .accessibilityHidden(true)
         Text(title)
           .font(.system(size: 12.5, weight: .semibold))
-          .foregroundStyle(iconColor == .red ? .red : .primary)
+          .foregroundStyle(isAlert ? RepoRadarColors.statusFailText : .primary)
       }
 
       Spacer(minLength: 0)
@@ -791,12 +850,13 @@ private struct SmallEmptyCardView: View {
       if let actionHint {
         Text(actionHint)
           .font(.system(size: 9.5, weight: .medium))
-          .foregroundStyle(Color.indigo)
+          .foregroundStyle(RepoRadarColors.statusIndigoText)
           .padding(.top, 1)
       }
 
       Spacer(minLength: 0)
     }
+    .accessibilityElement(children: .combine)
   }
 }
 
@@ -810,7 +870,7 @@ private struct MediumWidgetView: View {
     case .firstRun:
       MediumEmptyCardView(
         icon: AppSymbol.app,
-        iconColor: Color.indigo,
+        iconColor: RepoRadarColors.statusIndigo,
         title: "Welcome to Repo Radar",
         subtitle: "Open the menu bar app to configure GitHub access."
       )
@@ -818,7 +878,7 @@ private struct MediumWidgetView: View {
     case .noRepos:
       MediumEmptyCardView(
         icon: "book.closed",
-        iconColor: Color.indigo,
+        iconColor: RepoRadarColors.statusIndigo,
         title: "No Repositories",
         subtitle: "Add repositories to watch in Settings to see open PRs, CI, and stale branches."
       )
@@ -826,16 +886,17 @@ private struct MediumWidgetView: View {
     case .tokenError(let detail):
       MediumEmptyCardView(
         icon: "key.fill",
-        iconColor: .red,
+        iconColor: RepoRadarColors.statusFail,
         title: "Authentication Error",
         subtitle: detail,
-        actionHint: "Update token in Settings…"
+        actionHint: "Update token in Settings…",
+        isAlert: true
       )
 
     case .error(let detail):
       MediumEmptyCardView(
         icon: "exclamationmark.triangle.fill",
-        iconColor: .orange,
+        iconColor: RepoRadarColors.statusStale,
         title: "Error",
         subtitle: detail
       )
@@ -882,7 +943,7 @@ private struct MediumWidgetView: View {
       } else {
         MediumEmptyCardView(
           icon: "hourglass",
-          iconColor: .orange,
+          iconColor: RepoRadarColors.statusStale,
           title: "Rate Limited",
           subtitle: rateLimitNotice(resetAt: resetAt, detail: detail)
         )
@@ -923,6 +984,7 @@ private struct MediumDataView: View {
           .font(.system(size: 13, weight: .semibold))
           .foregroundStyle(sectionColor(section))
           .widgetAccentable()
+          .accessibilityHidden(true)
         Text(headerTitle)
           .font(.system(size: 13, weight: .semibold))
           .foregroundStyle(isDimmed ? .secondary : .primary)
@@ -935,25 +997,29 @@ private struct MediumDataView: View {
             MetricPill(
               count: snapshot.failingCI.count,
               label: "failing",
-              color: .red,
+              color: RepoRadarColors.statusFail,
+              textColor: RepoRadarColors.statusFailText,
               isAlert: snapshot.failingCI.count > 0
             )
             MetricPill(
               count: snapshot.pullRequests.count,
               label: "PRs",
-              color: Color(red: 0.39, green: 0.40, blue: 0.95),
+              color: RepoRadarColors.statusIndigo,
+              textColor: RepoRadarColors.statusIndigoText,
               isAlert: false
             )
             MetricPill(
               count: snapshot.pullRequests.filter { $0.isReviewRequested }.count,
               label: "reviews",
-              color: .purple,
+              color: RepoRadarColors.statusReview,
+              textColor: RepoRadarColors.statusReviewText,
               isAlert: snapshot.pullRequests.contains { $0.isReviewRequested }
             )
             MetricPill(
               count: snapshot.staleBranches.count,
               label: "stale",
-              color: .orange,
+              color: RepoRadarColors.statusStale,
+              textColor: RepoRadarColors.statusStaleText,
               isAlert: false
             )
           }
@@ -962,6 +1028,7 @@ private struct MediumDataView: View {
             count: filteredCount,
             label: section.displayName.lowercased(),
             color: sectionColor(section),
+            textColor: section == .failingCI ? RepoRadarColors.statusFailText : sectionColor(section),
             isAlert: section == .failingCI && filteredCount > 0
           )
         }
@@ -977,7 +1044,8 @@ private struct MediumDataView: View {
             meta: item.subtitle,
             metaPrefix: item.subtitlePrefix,
             timestamp: item.timestamp,
-            url: item.url
+            url: item.url,
+            accessibilityLabelText: item.accessibilityLabel
           )
         }
       }
@@ -989,7 +1057,7 @@ private struct MediumDataView: View {
       HStack {
         Text("Updated \(timeString(from: snapshot.updatedAt))")
           .font(.system(size: 9.5))
-          .foregroundStyle(.tertiary)
+          .foregroundStyle(.secondary)
 
         Spacer(minLength: 0)
 
@@ -997,11 +1065,12 @@ private struct MediumDataView: View {
           HStack(spacing: 3) {
             Image(systemName: "exclamationmark.triangle.fill")
               .font(.system(size: 8.5))
-              .foregroundStyle(.orange)
+              .foregroundStyle(RepoRadarColors.statusStale)
               .widgetAccentable()
+              .accessibilityHidden(true)
             Text(footerText)
               .font(.system(size: 9))
-              .foregroundStyle(.orange)
+              .foregroundStyle(RepoRadarColors.statusStaleText)
               .lineLimit(1)
           }
         }
@@ -1056,6 +1125,7 @@ private struct MediumAllClearView: View {
           .font(.system(size: 13, weight: .semibold))
           .foregroundStyle(sectionColor(section))
           .widgetAccentable()
+          .accessibilityHidden(true)
         Text(headerTitle)
           .font(.system(size: 13, weight: .semibold))
           .lineLimit(1)
@@ -1064,7 +1134,7 @@ private struct MediumAllClearView: View {
 
         Text("Updated \(timeString(from: snapshot.updatedAt))")
           .font(.system(size: 9.5))
-          .foregroundStyle(.tertiary)
+          .foregroundStyle(.secondary)
       }
 
       Spacer(minLength: 0)
@@ -1074,8 +1144,10 @@ private struct MediumAllClearView: View {
           clearCardContent
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
       } else {
         clearCardContent
+          .accessibilityElement(children: .combine)
       }
 
       Spacer(minLength: 0)
@@ -1086,8 +1158,9 @@ private struct MediumAllClearView: View {
     HStack(spacing: 12) {
       Image(systemName: "checkmark.seal.fill")
         .font(.system(size: 30))
-        .foregroundStyle(.green)
+        .foregroundStyle(RepoRadarColors.statusPass)
         .widgetAccentable()
+        .accessibilityHidden(true)
 
       VStack(alignment: .leading, spacing: 2) {
         Text(clearTitle)
@@ -1130,14 +1203,16 @@ private struct MediumEmptyCardView: View {
   let title: String
   let subtitle: String
   var actionHint: String? = nil
+  var isAlert: Bool = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
       HStack(spacing: 6) {
         Image(systemName: AppSymbol.app)
           .font(.system(size: 13, weight: .semibold))
-          .foregroundStyle(Color.indigo)
+          .foregroundStyle(RepoRadarColors.statusIndigo)
           .widgetAccentable()
+          .accessibilityHidden(true)
         Text("Repo Radar")
           .font(.system(size: 13, weight: .semibold))
         Spacer()
@@ -1151,11 +1226,12 @@ private struct MediumEmptyCardView: View {
           .foregroundStyle(iconColor)
           .frame(width: 32)
           .widgetAccentable()
+          .accessibilityHidden(true)
 
         VStack(alignment: .leading, spacing: 3) {
           Text(title)
             .font(.system(size: 13.5, weight: .semibold))
-            .foregroundStyle(iconColor == .red ? .red : .primary)
+            .foregroundStyle(isAlert ? RepoRadarColors.statusFailText : .primary)
 
           Text(subtitle)
             .font(.system(size: 11))
@@ -1165,7 +1241,7 @@ private struct MediumEmptyCardView: View {
           if let actionHint {
             Text(actionHint)
               .font(.system(size: 10.5, weight: .medium))
-              .foregroundStyle(Color.indigo)
+              .foregroundStyle(RepoRadarColors.statusIndigoText)
               .padding(.top, 1)
           }
         }
@@ -1173,6 +1249,7 @@ private struct MediumEmptyCardView: View {
 
       Spacer(minLength: 0)
     }
+    .accessibilityElement(children: .combine)
   }
 }
 
@@ -1186,7 +1263,7 @@ private struct LargeWidgetView: View {
     case .firstRun:
       LargeEmptyCardView(
         icon: AppSymbol.app,
-        iconColor: Color.indigo,
+        iconColor: RepoRadarColors.statusIndigo,
         title: "Welcome to Repo Radar",
         description: "Open the menu bar app to configure GitHub access. Your widget fills in after the first refresh."
       )
@@ -1194,7 +1271,7 @@ private struct LargeWidgetView: View {
     case .noRepos:
       LargeEmptyCardView(
         icon: "book.closed",
-        iconColor: Color.indigo,
+        iconColor: RepoRadarColors.statusIndigo,
         title: "No Repositories",
         description: "Add repositories to watch in Settings to see open PRs, CI, and stale branches across your projects."
       )
@@ -1202,16 +1279,17 @@ private struct LargeWidgetView: View {
     case .tokenError(let detail):
       LargeEmptyCardView(
         icon: "key.fill",
-        iconColor: .red,
+        iconColor: RepoRadarColors.statusFail,
         title: "Authentication Error",
         description: detail,
-        actionHint: "Update token in Settings…"
+        actionHint: "Update token in Settings…",
+        isAlert: true
       )
 
     case .error(let detail):
       LargeEmptyCardView(
         icon: "exclamationmark.triangle.fill",
-        iconColor: .orange,
+        iconColor: RepoRadarColors.statusStale,
         title: "Error",
         description: detail
       )
@@ -1258,7 +1336,7 @@ private struct LargeWidgetView: View {
       } else {
         LargeEmptyCardView(
           icon: "hourglass",
-          iconColor: .orange,
+          iconColor: RepoRadarColors.statusStale,
           title: "Rate Limited",
           description: rateLimitNotice(resetAt: resetAt, detail: detail)
         )
@@ -1313,6 +1391,7 @@ private struct LargeDataView: View {
             .font(.system(size: 14, weight: .semibold))
             .foregroundStyle(sectionColor(section))
             .widgetAccentable()
+            .accessibilityHidden(true)
           Text(headerTitle)
             .font(.system(size: 14, weight: .semibold))
             .foregroundStyle(isDimmed ? .secondary : .primary)
@@ -1323,7 +1402,7 @@ private struct LargeDataView: View {
 
         Text("Updated \(timeString(from: snapshot.updatedAt))")
           .font(.system(size: 10))
-          .foregroundStyle(.tertiary)
+          .foregroundStyle(.secondary)
       }
 
       // Offline or rate limit banner
@@ -1331,16 +1410,17 @@ private struct LargeDataView: View {
         HStack(spacing: 6) {
           Image(systemName: "exclamationmark.circle.fill")
             .font(.system(size: 11))
-            .foregroundStyle(.orange)
+            .foregroundStyle(RepoRadarColors.statusStale)
             .widgetAccentable()
+            .accessibilityHidden(true)
           Text(footerText)
             .font(.system(size: 10, weight: .medium))
-            .foregroundStyle(.orange)
+            .foregroundStyle(RepoRadarColors.statusStaleText)
             .lineLimit(1)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+        .background(RepoRadarColors.statusStale.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
       }
 
       // Metric Tiles
@@ -1349,25 +1429,29 @@ private struct LargeDataView: View {
           MetricTile(
             title: "Failing",
             count: snapshot.failingCI.count,
-            color: .red,
+            color: RepoRadarColors.statusFail,
+            textColor: RepoRadarColors.statusFailText,
             isAlert: snapshot.failingCI.count > 0
           )
           MetricTile(
             title: "PRs",
             count: snapshot.pullRequests.count,
-            color: Color(red: 0.39, green: 0.40, blue: 0.95),
+            color: RepoRadarColors.statusIndigo,
+            textColor: RepoRadarColors.statusIndigoText,
             isAlert: false
           )
           MetricTile(
             title: "Reviews",
             count: snapshot.pullRequests.filter { $0.isReviewRequested }.count,
-            color: .purple,
+            color: RepoRadarColors.statusReview,
+            textColor: RepoRadarColors.statusReviewText,
             isAlert: snapshot.pullRequests.contains { $0.isReviewRequested }
           )
           MetricTile(
             title: "Stale",
             count: snapshot.staleBranches.count,
-            color: .orange,
+            color: RepoRadarColors.statusStale,
+            textColor: RepoRadarColors.statusStaleText,
             isAlert: false
           )
         }
@@ -1385,7 +1469,7 @@ private struct LargeDataView: View {
             VStack(alignment: .leading, spacing: 3) {
               WidgetSectionHeader(
                 icon: "xmark.circle.fill",
-                iconColor: .red,
+                iconColor: RepoRadarColors.statusFail,
                 title: "FAILING CI",
                 count: snapshot.failingCI.count + snapshot.runningCI.count
               )
@@ -1394,12 +1478,13 @@ private struct LargeDataView: View {
                 let timeText = item.completedAt.map { WidgetSnapshot.relativeTimeString(from: $0) } ?? "failed"
                 WidgetRowView(
                   icon: "xmark.circle.fill",
-                  iconColor: .red,
+                  iconColor: RepoRadarColors.statusFail,
                   title: "\(item.repo) · \(item.ref)",
                   meta: "\(item.check) · \(timeText)",
                   metaPrefix: item.check,
                   timestamp: item.completedAt,
-                  url: WidgetGitHubURL.url(for: item)
+                  url: WidgetGitHubURL.url(for: item),
+                  accessibilityLabelText: item.accessibilityLabel()
                 )
               }
 
@@ -1409,7 +1494,8 @@ private struct LargeDataView: View {
                   iconColor: .secondary,
                   title: "\(item.repo) · \(item.ref)",
                   meta: "\(item.check) · running",
-                  url: WidgetGitHubURL.url(for: item)
+                  url: WidgetGitHubURL.url(for: item),
+                  accessibilityLabelText: item.accessibilityLabel()
                 )
               }
             }
@@ -1422,7 +1508,7 @@ private struct LargeDataView: View {
             VStack(alignment: .leading, spacing: 3) {
               WidgetSectionHeader(
                 icon: "arrow.triangle.pull",
-                iconColor: Color(red: 0.39, green: 0.40, blue: 0.95),
+                iconColor: RepoRadarColors.statusIndigo,
                 title: "PULL REQUESTS",
                 count: snapshot.pullRequests.count
               )
@@ -1434,12 +1520,13 @@ private struct LargeDataView: View {
                   : "\(pr.repo) #\(pr.number)"
                 WidgetRowView(
                   icon: pr.isReviewRequested ? "eye" : "arrow.triangle.pull",
-                  iconColor: pr.isReviewRequested ? .purple : Color(red: 0.39, green: 0.40, blue: 0.95),
+                  iconColor: pr.isReviewRequested ? RepoRadarColors.statusReview : RepoRadarColors.statusIndigo,
                   title: pr.title,
                   meta: "\(prefix) · \(timeText)",
                   metaPrefix: prefix,
                   timestamp: pr.updatedAt,
-                  url: WidgetGitHubURL.url(for: pr)
+                  url: WidgetGitHubURL.url(for: pr),
+                  accessibilityLabelText: pr.accessibilityLabel()
                 )
               }
             }
@@ -1452,7 +1539,7 @@ private struct LargeDataView: View {
             VStack(alignment: .leading, spacing: 3) {
               WidgetSectionHeader(
                 icon: "arrow.triangle.branch",
-                iconColor: .orange,
+                iconColor: RepoRadarColors.statusStale,
                 title: "STALE BRANCHES",
                 count: snapshot.staleBranches.count
               )
@@ -1460,10 +1547,11 @@ private struct LargeDataView: View {
               ForEach(staleDisplay) { item in
                 WidgetRowView(
                   icon: "arrow.triangle.branch",
-                  iconColor: .orange,
+                  iconColor: RepoRadarColors.statusStale,
                   title: item.branch,
                   meta: "\(item.repo) · \(item.ageDays)d",
-                  url: WidgetGitHubURL.url(for: item)
+                  url: WidgetGitHubURL.url(for: item),
+                  accessibilityLabelText: item.accessibilityLabel
                 )
               }
             }
@@ -1511,6 +1599,7 @@ private struct LargeAllClearView: View {
             .font(.system(size: 14, weight: .semibold))
             .foregroundStyle(sectionColor(section))
             .widgetAccentable()
+            .accessibilityHidden(true)
           Text(headerTitle)
             .font(.system(size: 14, weight: .semibold))
             .lineLimit(1)
@@ -1520,7 +1609,7 @@ private struct LargeAllClearView: View {
 
         Text("Updated \(timeString(from: snapshot.updatedAt))")
           .font(.system(size: 10))
-          .foregroundStyle(.tertiary)
+          .foregroundStyle(.secondary)
       }
 
       if section == .all {
@@ -1529,25 +1618,29 @@ private struct LargeAllClearView: View {
           MetricTile(
             title: "CI passing",
             count: 0,
-            color: .green,
+            color: RepoRadarColors.statusPass,
+            textColor: RepoRadarColors.statusPassText,
             isAlert: false
           )
           MetricTile(
             title: "PRs",
             count: 0,
-            color: Color(red: 0.39, green: 0.40, blue: 0.95),
+            color: RepoRadarColors.statusIndigo,
+            textColor: RepoRadarColors.statusIndigoText,
             isAlert: false
           )
           MetricTile(
             title: "Reviews",
             count: 0,
-            color: .purple,
+            color: RepoRadarColors.statusReview,
+            textColor: RepoRadarColors.statusReviewText,
             isAlert: false
           )
           MetricTile(
             title: "Stale",
             count: 0,
-            color: .orange,
+            color: RepoRadarColors.statusStale,
+            textColor: RepoRadarColors.statusStaleText,
             isAlert: false
           )
         }
@@ -1563,8 +1656,10 @@ private struct LargeAllClearView: View {
           clearCardContent
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
       } else {
         clearCardContent
+          .accessibilityElement(children: .combine)
       }
 
       Spacer(minLength: 0)
@@ -1575,8 +1670,9 @@ private struct LargeAllClearView: View {
     VStack(spacing: 8) {
       Image(systemName: "checkmark.seal.fill")
         .font(.system(size: 38))
-        .foregroundStyle(.green)
+        .foregroundStyle(RepoRadarColors.statusPass)
         .widgetAccentable()
+        .accessibilityHidden(true)
 
       Text(clearTitle)
         .font(.system(size: 16, weight: .semibold))
@@ -1617,14 +1713,16 @@ private struct LargeEmptyCardView: View {
   let title: String
   let description: String
   var actionHint: String? = nil
+  var isAlert: Bool = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
       HStack(spacing: 6) {
         Image(systemName: AppSymbol.app)
           .font(.system(size: 14, weight: .semibold))
-          .foregroundStyle(Color.indigo)
+          .foregroundStyle(RepoRadarColors.statusIndigo)
           .widgetAccentable()
+          .accessibilityHidden(true)
         Text("Repo Radar")
           .font(.system(size: 14, weight: .semibold))
         Spacer()
@@ -1643,10 +1741,11 @@ private struct LargeEmptyCardView: View {
             .foregroundStyle(iconColor)
             .widgetAccentable()
         }
+        .accessibilityHidden(true)
 
         Text(title)
           .font(.system(size: 15, weight: .semibold))
-          .foregroundStyle(iconColor == .red ? .red : .primary)
+          .foregroundStyle(isAlert ? RepoRadarColors.statusFailText : .primary)
 
         Text(description)
           .font(.system(size: 12))
@@ -1658,7 +1757,7 @@ private struct LargeEmptyCardView: View {
         if let actionHint {
           Text(actionHint)
             .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(Color.indigo)
+            .foregroundStyle(RepoRadarColors.statusIndigoText)
             .padding(.top, 2)
         }
       }
@@ -1666,6 +1765,7 @@ private struct LargeEmptyCardView: View {
 
       Spacer(minLength: 0)
     }
+    .accessibilityElement(children: .combine)
   }
 }
 

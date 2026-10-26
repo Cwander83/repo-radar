@@ -38,6 +38,30 @@ public struct FailingCIItem: Codable, Sendable, Equatable, Identifiable {
     self.startedAt = startedAt
     self.completedAt = completedAt
   }
+
+  /// VoiceOver accessibility label, e.g. "Failing CI, gravity-bar main, Build and Test, 12 minutes ago".
+  public func accessibilityLabel(now: Date = Date()) -> String {
+    let shortRepo = Self.shortRepositoryName(repo)
+    let spokenCheck = Self.spokenText(check)
+    if let completedAt {
+      let timePart = WidgetSnapshot.spokenRelativeTimeString(from: completedAt, relativeTo: now)
+      return "Failing CI, \(shortRepo) \(ref), \(spokenCheck), \(timePart)"
+    }
+    return "Failing CI, \(shortRepo) \(ref), \(spokenCheck)"
+  }
+
+  public static func shortRepositoryName(_ repo: String) -> String {
+    if let slash = repo.lastIndex(of: "/") {
+      return String(repo[repo.index(after: slash)...])
+    }
+    return repo
+  }
+
+  public static func spokenText(_ text: String) -> String {
+    text
+      .replacingOccurrences(of: " & ", with: " and ")
+      .replacingOccurrences(of: "&", with: " and ")
+  }
 }
 
 /// A running or queued CI check item.
@@ -67,6 +91,17 @@ public struct RunningCIItem: Codable, Sendable, Equatable, Identifiable {
     self.status = status
     self.url = url
     self.startedAt = startedAt
+  }
+
+  /// VoiceOver accessibility label, e.g. "Running CI, ollama-bar develop, Build and Test, running 3 minutes".
+  public func accessibilityLabel(now: Date = Date()) -> String {
+    let shortRepo = FailingCIItem.shortRepositoryName(repo)
+    let spokenCheck = FailingCIItem.spokenText(check)
+    if let startedAt {
+      let duration = WidgetSnapshot.spokenDurationString(from: startedAt, relativeTo: now)
+      return "Running CI, \(shortRepo) \(ref), \(spokenCheck), running \(duration)"
+    }
+    return "Running CI, \(shortRepo) \(ref), \(spokenCheck), running"
   }
 }
 
@@ -111,6 +146,14 @@ public struct ClassifiedPullRequest: Codable, Sendable, Equatable, Identifiable 
     self.authorLogin = authorLogin
     self.updatedAt = updatedAt
   }
+
+  /// VoiceOver accessibility label, e.g. "Review requested pull request, Fix popover hover state, gravity-bar #14, 5 hours ago".
+  public func accessibilityLabel(now: Date = Date()) -> String {
+    let shortRepo = FailingCIItem.shortRepositoryName(repo)
+    let timePart = WidgetSnapshot.spokenRelativeTimeString(from: updatedAt, relativeTo: now)
+    let prefix = isReviewRequested ? "Review requested pull request" : "Pull request"
+    return "\(prefix), \(title), \(shortRepo) #\(number), \(timePart)"
+  }
 }
 
 /// A classified stale branch item.
@@ -134,6 +177,13 @@ public struct StaleBranchItem: Codable, Sendable, Equatable, Identifiable {
     self.ageDays = ageDays
     self.lastCommitDate = lastCommitDate
     self.lastCommitOid = lastCommitOid
+  }
+
+  /// VoiceOver accessibility label, e.g. "Stale branch, feat/weekly-window, gravity-bar, 58 days old".
+  public var accessibilityLabel: String {
+    let shortRepo = FailingCIItem.shortRepositoryName(repo)
+    let unit = ageDays == 1 ? "day" : "days"
+    return "Stale branch, \(branch), \(shortRepo), \(ageDays) \(unit) old"
   }
 }
 

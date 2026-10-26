@@ -18,6 +18,7 @@ public struct WidgetDisplayItem: Identifiable, Sendable, Equatable {
   public let timestamp: Date?
   public let iconName: String
   public let url: URL?
+  public let accessibilityLabel: String
 
   public init(
     id: String,
@@ -28,7 +29,8 @@ public struct WidgetDisplayItem: Identifiable, Sendable, Equatable {
     subtitlePrefix: String? = nil,
     timestamp: Date? = nil,
     iconName: String,
-    url: URL? = nil
+    url: URL? = nil,
+    accessibilityLabel: String = ""
   ) {
     self.id = id
     self.kind = kind
@@ -39,6 +41,7 @@ public struct WidgetDisplayItem: Identifiable, Sendable, Equatable {
     self.timestamp = timestamp
     self.iconName = iconName
     self.url = url
+    self.accessibilityLabel = accessibilityLabel.isEmpty ? "\(title), \(subtitle)" : accessibilityLabel
   }
 }
 
@@ -54,6 +57,37 @@ extension WidgetSnapshot {
       return "\(diff / 3600)h ago"
     } else {
       return "\(diff / 86400)d ago"
+    }
+  }
+
+  /// Computes spoken relative time strings for VoiceOver like "just now", "12 minutes ago", "3 hours ago", "5 days ago".
+  public static func spokenRelativeTimeString(from date: Date, relativeTo now: Date = Date()) -> String {
+    let diff = max(0, Int(now.timeIntervalSince(date)))
+    if diff < 60 {
+      return "just now"
+    } else if diff < 3600 {
+      let m = diff / 60
+      return "\(m) \(m == 1 ? "minute" : "minutes") ago"
+    } else if diff < 86400 {
+      let h = diff / 3600
+      return "\(h) \(h == 1 ? "hour" : "hours") ago"
+    } else {
+      let d = diff / 86400
+      return "\(d) \(d == 1 ? "day" : "days") ago"
+    }
+  }
+
+  /// Computes spoken duration strings for VoiceOver like "45 seconds", "3 minutes", "2 hours".
+  public static func spokenDurationString(from date: Date, relativeTo now: Date = Date()) -> String {
+    let diff = max(0, Int(now.timeIntervalSince(date)))
+    if diff < 60 {
+      return "\(diff) \(diff == 1 ? "second" : "seconds")"
+    } else if diff < 3600 {
+      let m = diff / 60
+      return "\(m) \(m == 1 ? "minute" : "minutes")"
+    } else {
+      let h = diff / 3600
+      return "\(h) \(h == 1 ? "hour" : "hours")"
     }
   }
 
@@ -79,7 +113,8 @@ extension WidgetSnapshot {
           subtitlePrefix: item.completedAt == nil ? nil : item.check,
           timestamp: item.completedAt,
           iconName: "xmark.circle.fill",
-          url: WidgetGitHubURL.url(for: item)
+          url: WidgetGitHubURL.url(for: item),
+          accessibilityLabel: item.accessibilityLabel(now: now)
         )
       )
     }
@@ -95,7 +130,8 @@ extension WidgetSnapshot {
           subtitle: "\(item.check) · running",
           timestamp: nil,
           iconName: "circle.dashed",
-          url: WidgetGitHubURL.url(for: item)
+          url: WidgetGitHubURL.url(for: item),
+          accessibilityLabel: item.accessibilityLabel(now: now)
         )
       )
     }
@@ -117,7 +153,8 @@ extension WidgetSnapshot {
           subtitlePrefix: prefix,
           timestamp: pr.updatedAt,
           iconName: pr.isReviewRequested ? "eye" : "arrow.triangle.pull",
-          url: WidgetGitHubURL.url(for: pr)
+          url: WidgetGitHubURL.url(for: pr),
+          accessibilityLabel: pr.accessibilityLabel(now: now)
         )
       )
     }
@@ -134,7 +171,8 @@ extension WidgetSnapshot {
           subtitle: subtitle,
           timestamp: nil,
           iconName: "arrow.triangle.branch",
-          url: WidgetGitHubURL.url(for: branch)
+          url: WidgetGitHubURL.url(for: branch),
+          accessibilityLabel: branch.accessibilityLabel
         )
       )
     }
