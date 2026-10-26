@@ -13,7 +13,7 @@ Native Swift (`RepoRadarCore` package + menu bar host app + WidgetKit extension)
 - macOS 26+
 - Full Xcode (not just Command Line Tools; `xcode-select -p` must point into `Xcode.app`)
 - Apple ID signed in to Xcode (Settings → Accounts) for free personal-team signing
-- GitHub fine-grained Personal Access Token (read-only: Contents, Pull requests, Checks, Commit statuses, Metadata)
+- GitHub fine-grained Personal Access Token (read-only: Metadata, Contents, Pull requests, Commit statuses, Actions)
 
 ## Build & Install
 
@@ -21,8 +21,9 @@ Native Swift (`RepoRadarCore` package + menu bar host app + WidgetKit extension)
 
    ```bash
    cp Configurations/Local.xcconfig.template Configurations/Local.xcconfig
-   # Edit Configurations/Local.xcconfig if your DEVELOPMENT_TEAM differs
    ```
+
+   Find your Team ID in Xcode (Settings → Accounts → your Apple ID → Team ID) or via `security find-identity -v -p codesigning`. If it differs from the default in the template, edit `Configurations/Local.xcconfig`.
 
 2. Build, sign, install to `/Applications/RepoRadar.app`, and launch:
 
