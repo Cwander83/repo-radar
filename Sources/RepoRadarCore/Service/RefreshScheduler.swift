@@ -21,6 +21,12 @@ public final class RefreshScheduler: ObservableObject {
   /// Waits for a usable network path before a refresh on wake.
   public let networkMonitor: NetworkPathMonitoring
 
+  /// Notification manager responsible for posting local alerts when CI fails.
+  public let notificationManager: any CINotificationManaging
+
+  /// Identifiers of failing CI items from the previous evaluation.
+  public private(set) var knownFailingCheckIDs: Set<String>
+
   /// Cached configuration loaded from ConfigStore to prevent UserDefaults reads during renders.
   @Published public private(set) var cachedConfig: RepoRadarConfig
 
@@ -101,6 +107,7 @@ public final class RefreshScheduler: ObservableObject {
     service: RepoRadarService,
     clock: ClockProtocol = SystemClock(),
     networkMonitor: NetworkPathMonitoring = SystemNetworkPathMonitor(),
+    notificationManager: any CINotificationManaging = SystemCINotificationManager(),
     widgetReloader: @escaping WidgetReloader = {
       #if canImport(WidgetKit)
       WidgetCenter.shared.reloadAllTimelines()
@@ -110,10 +117,13 @@ public final class RefreshScheduler: ObservableObject {
     self.service = service
     self.clock = clock
     self.networkMonitor = networkMonitor
+    self.notificationManager = notificationManager
     self.widgetReloader = widgetReloader
     self.cachedConfig = service.configStore.load()
     self.hasToken = service.tokenStore.hasToken()
-    self.latestSnapshot = try? service.snapshotStore.read()
+    let initialSnapshot = try? service.snapshotStore.read()
+    self.latestSnapshot = initialSnapshot
+    self.knownFailingCheckIDs = Set(initialSnapshot?.failingCI.map(\.id) ?? [])
   }
 
   /// Convenience initializer targeting the standard App Group configuration and Keychain storage.
@@ -126,6 +136,8 @@ public final class RefreshScheduler: ObservableObject {
     keychainAccount: String = KeychainTokenStore.defaultAccount,
     client: GitHubGraphQLClient = GitHubGraphQLClient(),
     clock: ClockProtocol = SystemClock(),
+    networkMonitor: NetworkPathMonitoring = SystemNetworkPathMonitor(),
+    notificationManager: any CINotificationManaging = SystemCINotificationManager(),
     widgetReloader: @escaping WidgetReloader = {
       #if canImport(WidgetKit)
       WidgetCenter.shared.reloadAllTimelines()
@@ -144,7 +156,13 @@ public final class RefreshScheduler: ObservableObject {
     else {
       return nil
     }
-    self.init(service: service, clock: clock, widgetReloader: widgetReloader)
+    self.init(
+      service: service,
+      clock: clock,
+      networkMonitor: networkMonitor,
+      notificationManager: notificationManager,
+      widgetReloader: widgetReloader
+    )
   }
 
   deinit {
@@ -189,6 +207,7 @@ public final class RefreshScheduler: ObservableObject {
     }
 
     isRefreshing = true
+    refreshCachedState()
     let task = Task<WidgetSnapshot, Error> {
       try await service.refresh(now: clock.now)
     }
@@ -206,6 +225,15 @@ public final class RefreshScheduler: ObservableObject {
       self.consecutiveOfflineCount = 0
       self.latestSnapshot = snapshot
       self.widgetReloader()
+
+      if cachedConfig.ciNotifications {
+        let newlyFailing = snapshot.failingCI.filter { !knownFailingCheckIDs.contains($0.id) }
+        for item in newlyFailing {
+          try? await notificationManager.postNotification(for: item)
+        }
+      }
+      self.knownFailingCheckIDs = Set(snapshot.failingCI.map(\.id))
+
       return snapshot
     } catch {
       self.lastError = error

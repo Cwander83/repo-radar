@@ -1,14 +1,23 @@
 import SwiftUI
 import Combine
+import UserNotifications
 import RepoRadarCore
 
 @MainActor
 final class AppModel: ObservableObject {
   let scheduler: RefreshScheduler?
+  let notificationDelegate: CINotificationDelegate
   private var cancellable: AnyCancellable?
   private var wakeCancellable: AnyCancellable?
 
-  init(scheduler: RefreshScheduler? = RefreshScheduler()) {
+  init(
+    scheduler: RefreshScheduler? = RefreshScheduler(),
+    notificationDelegate: CINotificationDelegate = CINotificationDelegate()
+  ) {
+    self.notificationDelegate = notificationDelegate
+    if Bundle.main.bundleIdentifier != nil {
+      UNUserNotificationCenter.current().delegate = notificationDelegate
+    }
     self.scheduler = scheduler
 
     if let scheduler {

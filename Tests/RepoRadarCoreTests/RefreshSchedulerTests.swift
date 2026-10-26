@@ -30,9 +30,11 @@ struct RefreshSchedulerTests {
     let client: GitHubGraphQLClient
     let service: RepoRadarService
 
-    init(repos: [String] = ["Cwander83/repo-radar"], pollInterval: PollInterval = .fiveMinutes)
-      throws
-    {
+    init(
+      repos: [String] = ["Cwander83/repo-radar"],
+      pollInterval: PollInterval = .fiveMinutes,
+      ciNotifications: Bool = false
+    ) throws {
       self.suiteName = "test-scheduler-\(UUID().uuidString)"
       self.defaults = UserDefaults(suiteName: suiteName)!
       self.configStore = ConfigStore(userDefaults: defaults)
@@ -40,7 +42,8 @@ struct RefreshSchedulerTests {
         RepoRadarConfig(
           watchedRepos: repos,
           pollInterval: pollInterval,
-          staleDays: 30
+          staleDays: 30,
+          ciNotifications: ciNotifications
         )
       )
 
@@ -630,5 +633,159 @@ struct RefreshSchedulerTests {
 
     network.satisfy()
     #expect(counter.count == 1)
+  }
+
+  private func loadSyntheticFixture() throws -> Data {
+    try TestFixtures.loadData(named: "synthetic-edge-cases")
+  }
+
+  @Test("Pass-to-fail transition notifies once, fail-to-fail stays quiet, and recovery resets state (CHR-68)")
+  func testNewlyFailingCINotifications() async throws {
+    let ctx = try TestContext(
+      repos: ["octo-user/alpha", "octo-user/delta"],
+      pollInterval: .fiveMinutes,
+      ciNotifications: true
+    )
+    defer { ctx.cleanup() }
+
+    let passingData = try loadRecordedPublicFixture()
+    let failingData = try loadSyntheticFixture()
+
+    final class FixtureHolder: @unchecked Sendable {
+      var currentData: Data
+      init(data: Data) { self.currentData = data }
+    }
+    let holder = FixtureHolder(data: passingData)
+
+    MockURLProtocol.registerHandler(id: ctx.mockID) { _ in
+      let response = HTTPURLResponse(
+        url: URL(string: "https://api.github.com/graphql")!,
+        statusCode: 200,
+        httpVersion: nil,
+        headerFields: ["Content-Type": "application/json"]
+      )!
+      return (response, holder.currentData)
+    }
+
+    let fakeClock = FakeClock()
+    let mockNotifications = MockCINotificationManager()
+    let scheduler = RefreshScheduler(
+      service: ctx.service,
+      clock: fakeClock,
+      notificationManager: mockNotifications
+    )
+
+    // 1. Initial refresh with passing checks: no notifications posted
+    try await scheduler.refreshNow()
+    #expect(scheduler.failingCICount == 0)
+    #expect(mockNotifications.postedItems.isEmpty)
+
+    // 2. Transition from passing to failing: notifies once per newly failing check
+    holder.currentData = failingData
+    try await scheduler.refreshNow()
+    #expect(scheduler.failingCICount == 4)
+    #expect(mockNotifications.postedItems.count == 4)
+
+    // Grouping: each notification names repo, ref, and check, with target URL
+    for item in mockNotifications.postedItems {
+      #expect(!item.repo.isEmpty)
+      #expect(!item.ref.isEmpty)
+      #expect(!item.check.isEmpty)
+      #expect(WidgetGitHubURL.url(for: item).scheme == "https")
+    }
+
+    // 3. Consecutive refresh with same failing checks (fail -> fail): stays quiet
+    mockNotifications.reset()
+    try await scheduler.refreshNow()
+    #expect(scheduler.failingCICount == 4)
+    #expect(mockNotifications.postedItems.isEmpty)
+
+    // 4. Checks recover / pass: stays quiet
+    holder.currentData = passingData
+    try await scheduler.refreshNow()
+    #expect(scheduler.failingCICount == 0)
+    #expect(mockNotifications.postedItems.isEmpty)
+
+    // 5. Checks fail again (pass -> fail): notifies once more
+    holder.currentData = failingData
+    try await scheduler.refreshNow()
+    #expect(scheduler.failingCICount == 4)
+    #expect(mockNotifications.postedItems.count == 4)
+  }
+
+  @Test("Opt-in ciNotifications off by default suppresses notifications on failures (CHR-68)")
+  func testCINotificationsDisabledStaysQuiet() async throws {
+    let ctx = try TestContext(
+      repos: ["octo-user/alpha", "octo-user/delta"],
+      pollInterval: .fiveMinutes,
+      ciNotifications: false
+    )
+    defer { ctx.cleanup() }
+
+    let failingData = try loadSyntheticFixture()
+    MockURLProtocol.registerHandler(id: ctx.mockID) { _ in
+      let response = HTTPURLResponse(
+        url: URL(string: "https://api.github.com/graphql")!,
+        statusCode: 200,
+        httpVersion: nil,
+        headerFields: ["Content-Type": "application/json"]
+      )!
+      return (response, failingData)
+    }
+
+    let fakeClock = FakeClock()
+    let mockNotifications = MockCINotificationManager()
+    let scheduler = RefreshScheduler(
+      service: ctx.service,
+      clock: fakeClock,
+      notificationManager: mockNotifications
+    )
+
+    try await scheduler.refreshNow()
+    #expect(scheduler.failingCICount == 4)
+    #expect(mockNotifications.postedItems.isEmpty)
+  }
+
+  @Test("Pre-existing snapshot on launch populates known failures so first refresh stays quiet (CHR-68)")
+  func testPreExistingSnapshotSuppressesNotificationOnRelaunch() async throws {
+    let ctx = try TestContext(
+      repos: ["octo-user/alpha", "octo-user/delta"],
+      pollInterval: .fiveMinutes,
+      ciNotifications: true
+    )
+    defer { ctx.cleanup() }
+
+    let failingData = try loadSyntheticFixture()
+    MockURLProtocol.registerHandler(id: ctx.mockID) { _ in
+      let response = HTTPURLResponse(
+        url: URL(string: "https://api.github.com/graphql")!,
+        statusCode: 200,
+        httpVersion: nil,
+        headerFields: ["Content-Type": "application/json"]
+      )!
+      return (response, failingData)
+    }
+
+    // First instance refreshes and writes failing snapshot to disk
+    let mockNotifications1 = MockCINotificationManager()
+    let scheduler1 = RefreshScheduler(
+      service: ctx.service,
+      notificationManager: mockNotifications1
+    )
+    try await scheduler1.refreshNow()
+    #expect(mockNotifications1.postedItems.count == 4)
+
+    // Second instance launches (like app reboot/relaunch) with existing snapshot already on disk
+    let mockNotifications2 = MockCINotificationManager()
+    let scheduler2 = RefreshScheduler(
+      service: ctx.service,
+      notificationManager: mockNotifications2
+    )
+    #expect(scheduler2.knownFailingCheckIDs.count == 4)
+
+    // First refresh in new session with same failing checks stays quiet
+    try await scheduler2.refreshNow()
+    #expect(scheduler2.failingCICount == 4)
+    #expect(mockNotifications2.postedItems.isEmpty)
   }
 }

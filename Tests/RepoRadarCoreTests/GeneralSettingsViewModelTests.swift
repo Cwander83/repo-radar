@@ -257,4 +257,37 @@ struct GeneralSettingsViewModelTests {
     #expect(vm.showMenuBarCount == false)
     #expect(vm.ciNotifications == true)
   }
+
+  @Test("Toggling ciNotifications requests authorization on notificationManager")
+  @MainActor
+  func togglingCINotificationsRequestsAuthorization() async throws {
+    let (defaults, suite) = makeTestDefaults()
+    defer { defaults.removePersistentDomain(forName: suite) }
+
+    let store = ConfigStore(userDefaults: defaults)
+    let loginManager = InMemoryLaunchAtLoginManager(status: .notRegistered)
+    let mockNotifications = MockCINotificationManager(authorizationResult: true)
+
+    let vm = GeneralSettingsViewModel(
+      configStore: store,
+      launchAtLoginManager: loginManager,
+      notificationManager: mockNotifications
+    )
+
+    #expect(mockNotifications.authorizationRequestsCount == 0)
+
+    vm.ciNotifications = true
+
+    for _ in 0..<20 {
+      if mockNotifications.authorizationRequestsCount > 0 { break }
+      try await Task.sleep(nanoseconds: 10_000_000)
+    }
+
+    #expect(mockNotifications.authorizationRequestsCount == 1)
+    #expect(store.load().ciNotifications == true)
+
+    vm.ciNotifications = false
+    #expect(mockNotifications.authorizationRequestsCount == 1)
+    #expect(store.load().ciNotifications == false)
+  }
 }

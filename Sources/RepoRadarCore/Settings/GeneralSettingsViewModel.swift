@@ -10,6 +10,7 @@ import AppKit
 public final class GeneralSettingsViewModel: ObservableObject {
   public let configStore: ConfigStore
   public let launchAtLoginManager: any LaunchAtLoginManaging
+  public let notificationManager: any CINotificationManaging
   public var onConfigChange: ((RepoRadarConfig) -> Void)?
 
   private var cancellables = Set<AnyCancellable>()
@@ -47,6 +48,11 @@ public final class GeneralSettingsViewModel: ObservableObject {
   @Published public var ciNotifications: Bool {
     didSet {
       guard ciNotifications != oldValue else { return }
+      if ciNotifications {
+        Task { [notificationManager] in
+          await notificationManager.requestAuthorization()
+        }
+      }
       save()
     }
   }
@@ -57,10 +63,12 @@ public final class GeneralSettingsViewModel: ObservableObject {
   public init(
     configStore: ConfigStore,
     launchAtLoginManager: any LaunchAtLoginManaging = AppServiceLaunchAtLoginManager(),
+    notificationManager: any CINotificationManaging = SystemCINotificationManager(),
     onConfigChange: ((RepoRadarConfig) -> Void)? = nil
   ) {
     self.configStore = configStore
     self.launchAtLoginManager = launchAtLoginManager
+    self.notificationManager = notificationManager
     self.onConfigChange = onConfigChange
 
     let config = configStore.load()
