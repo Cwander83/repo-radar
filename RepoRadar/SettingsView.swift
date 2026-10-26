@@ -202,6 +202,22 @@ public struct GeneralSettingsView: View {
 
       Section {
         Toggle("Notify me when CI turns red", isOn: $viewModel.ciNotifications)
+
+        if viewModel.ciNotifications && viewModel.isNotificationPermissionDenied {
+          HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+              .foregroundStyle(.orange)
+            Text("Notifications are off for RepoRadar in System Settings")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+            Spacer()
+            Button("Open Settings") {
+              viewModel.openSystemSettingsNotifications()
+            }
+            .buttonStyle(.link)
+            .font(.caption)
+          }
+        }
       } footer: {
         Text("Only when a check goes from passing to failing. Off by default.")
           .font(.system(size: 11))
@@ -214,6 +230,7 @@ public struct GeneralSettingsView: View {
     .padding(.bottom, 8)
     .onAppear {
       viewModel.refreshLaunchAtLoginStatus()
+      viewModel.checkNotificationAuthorization()
     }
   }
 }

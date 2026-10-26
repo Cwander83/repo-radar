@@ -49,14 +49,19 @@ public final class GeneralSettingsViewModel: ObservableObject {
     didSet {
       guard ciNotifications != oldValue else { return }
       if ciNotifications {
-        Task { [notificationManager] in
-          await notificationManager.requestAuthorization()
+        Task { @MainActor [weak self, notificationManager] in
+          let granted = await notificationManager.requestAuthorization()
+          let status = await notificationManager.authorizationStatus()
+          self?.isNotificationPermissionDenied = (status == .denied) || !granted
         }
+      } else {
+        isNotificationPermissionDenied = false
       }
       save()
     }
   }
 
+  @Published public var isNotificationPermissionDenied: Bool = false
   @Published public var launchAtLoginStatus: LaunchAtLoginStatus
   @Published public var launchAtLoginError: String?
 
@@ -96,14 +101,30 @@ public final class GeneralSettingsViewModel: ObservableObject {
       onConfigChange?(updated)
     }
 
+    checkNotificationAuthorization()
+
     #if os(macOS)
     NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
       .receive(on: DispatchQueue.main)
       .sink { [weak self] _ in
         self?.refreshLaunchAtLoginStatus()
+        self?.checkNotificationAuthorization()
       }
       .store(in: &cancellables)
     #endif
+  }
+
+  /// Checks system notification authorization and updates `isNotificationPermissionDenied`.
+  public func checkNotificationAuthorization() {
+    Task { @MainActor [weak self, notificationManager] in
+      let status = await notificationManager.authorizationStatus()
+      self?.isNotificationPermissionDenied = (status == .denied)
+    }
+  }
+
+  /// Opens macOS System Settings -> Notifications.
+  public func openSystemSettingsNotifications() {
+    notificationManager.openSystemSettingsNotifications()
   }
 
   /// Re-checks system login item status and updates view model and config store if changed.
@@ -134,6 +155,7 @@ public final class GeneralSettingsViewModel: ObservableObject {
     self.showMenuBarCount = config.showMenuBarCount
     self.ciNotifications = config.ciNotifications
     refreshLaunchAtLoginStatus()
+    checkNotificationAuthorization()
   }
 
   private func handleLaunchAtLoginChange(to enabled: Bool) {

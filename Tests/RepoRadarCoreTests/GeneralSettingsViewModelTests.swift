@@ -289,5 +289,87 @@ struct GeneralSettingsViewModelTests {
     vm.ciNotifications = false
     #expect(mockNotifications.authorizationRequestsCount == 1)
     #expect(store.load().ciNotifications == false)
+    #expect(vm.isNotificationPermissionDenied == false)
+  }
+
+  @Test("When notification authorization is denied, toggling on publishes denied state and keeps toggle on")
+  @MainActor
+  func deniedNotificationAuthorizationPublishesDeniedState() async throws {
+    let (defaults, suite) = makeTestDefaults()
+    defer { defaults.removePersistentDomain(forName: suite) }
+
+    let store = ConfigStore(userDefaults: defaults)
+    let loginManager = InMemoryLaunchAtLoginManager(status: .notRegistered)
+    let mockNotifications = MockCINotificationManager(
+      status: .denied,
+      authorizationResult: false
+    )
+
+    let vm = GeneralSettingsViewModel(
+      configStore: store,
+      launchAtLoginManager: loginManager,
+      notificationManager: mockNotifications
+    )
+
+    // Wait for initial checkNotificationAuthorization
+    for _ in 0..<20 {
+      if vm.isNotificationPermissionDenied { break }
+      try await Task.sleep(nanoseconds: 10_000_000)
+    }
+    #expect(vm.isNotificationPermissionDenied == true)
+
+    // Toggling on when denied requests authorization and remains denied, keeping toggle on
+    vm.ciNotifications = true
+
+    for _ in 0..<20 {
+      if mockNotifications.authorizationRequestsCount > 0 { break }
+      try await Task.sleep(nanoseconds: 10_000_000)
+    }
+
+    #expect(mockNotifications.authorizationRequestsCount == 1)
+    #expect(vm.ciNotifications == true)
+    #expect(vm.isNotificationPermissionDenied == true)
+    #expect(store.load().ciNotifications == true)
+
+    // openSystemSettingsNotifications opens system settings
+    #expect(mockNotifications.openSettingsCount == 0)
+    vm.openSystemSettingsNotifications()
+    #expect(mockNotifications.openSettingsCount == 1)
+  }
+
+  @Test("When notification authorization is authorized, no denied state is published")
+  @MainActor
+  func authorizedNotificationPublishesNoDeniedState() async throws {
+    let (defaults, suite) = makeTestDefaults()
+    defer { defaults.removePersistentDomain(forName: suite) }
+
+    let store = ConfigStore(userDefaults: defaults)
+    let loginManager = InMemoryLaunchAtLoginManager(status: .notRegistered)
+    let mockNotifications = MockCINotificationManager(
+      status: .authorized,
+      authorizationResult: true
+    )
+
+    let vm = GeneralSettingsViewModel(
+      configStore: store,
+      launchAtLoginManager: loginManager,
+      notificationManager: mockNotifications
+    )
+
+    for _ in 0..<10 {
+      try await Task.sleep(nanoseconds: 5_000_000)
+    }
+    #expect(vm.isNotificationPermissionDenied == false)
+
+    vm.ciNotifications = true
+
+    for _ in 0..<20 {
+      if mockNotifications.authorizationRequestsCount > 0 { break }
+      try await Task.sleep(nanoseconds: 10_000_000)
+    }
+
+    #expect(mockNotifications.authorizationRequestsCount == 1)
+    #expect(vm.ciNotifications == true)
+    #expect(vm.isNotificationPermissionDenied == false)
   }
 }

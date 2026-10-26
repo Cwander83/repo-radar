@@ -95,15 +95,22 @@ struct CINotificationManagerTests {
     )
 
     try await mock.postNotification(for: item1)
-    try await mock.postNotifications(for: [item2])
+    try await mock.postNotification(for: item2)
 
     #expect(mock.postedItems.count == 2)
     #expect(mock.postedItems[0].id == item1.id)
     #expect(mock.postedItems[1].id == item2.id)
 
+    mock.openSystemSettingsNotifications()
+    #expect(mock.openSettingsCount == 1)
+
+    let status = await mock.authorizationStatus()
+    #expect(status == .authorized)
+
     mock.reset()
     #expect(mock.postedItems.isEmpty)
     #expect(mock.authorizationRequestsCount == 0)
+    #expect(mock.openSettingsCount == 0)
   }
 
   @Test("SystemCINotificationManager safely no-ops without bundle proxy in CLI")

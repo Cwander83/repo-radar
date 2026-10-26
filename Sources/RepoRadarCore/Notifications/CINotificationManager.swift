@@ -6,23 +6,27 @@ import UserNotifications
 import AppKit
 #endif
 
+/// Notification authorization states.
+public enum CINotificationAuthorizationStatus: String, Sendable, Equatable {
+  case notDetermined
+  case authorized
+  case denied
+}
+
 /// Protocol abstracting local notification management for CI failures.
 public protocol CINotificationManaging: Sendable {
+  /// Returns the current notification authorization status.
+  func authorizationStatus() async -> CINotificationAuthorizationStatus
+
   /// Requests user authorization to display local notifications.
   @discardableResult
   func requestAuthorization() async -> Bool
 
   /// Posts a local notification for a newly failing CI check.
   func postNotification(for item: FailingCIItem) async throws
-}
 
-extension CINotificationManaging {
-  /// Convenience helper to post notifications for multiple newly failing CI checks.
-  public func postNotifications(for items: [FailingCIItem]) async throws {
-    for item in items {
-      try await postNotification(for: item)
-    }
-  }
+  /// Opens macOS System Settings -> Notifications.
+  func openSystemSettingsNotifications()
 }
 
 /// Production implementation of `CINotificationManaging` backed by Apple's `UserNotifications` framework.
@@ -40,11 +44,26 @@ public final class SystemCINotificationManager: NSObject, CINotificationManaging
     super.init()
   }
 
+  public func authorizationStatus() async -> CINotificationAuthorizationStatus {
+    guard let center = centerProvider() else { return .notDetermined }
+    let settings = await center.notificationSettings()
+    switch settings.authorizationStatus {
+    case .notDetermined:
+      return .notDetermined
+    case .denied:
+      return .denied
+    case .authorized, .provisional, .ephemeral:
+      return .authorized
+    @unknown default:
+      return .notDetermined
+    }
+  }
+
   @discardableResult
   public func requestAuthorization() async -> Bool {
     guard let center = centerProvider() else { return false }
     do {
-      return try await center.requestAuthorization(options: [.alert, .sound, .badge])
+      return try await center.requestAuthorization(options: [.alert, .sound])
     } catch {
       return false
     }
@@ -61,10 +80,7 @@ public final class SystemCINotificationManager: NSObject, CINotificationManaging
 
     let targetURL = WidgetGitHubURL.url(for: item)
     content.userInfo = [
-      "targetURL": targetURL.absoluteString,
-      "repo": item.repo,
-      "ref": item.ref,
-      "check": item.check
+      "targetURL": targetURL.absoluteString
     ]
 
     let request = UNNotificationRequest(
@@ -73,6 +89,18 @@ public final class SystemCINotificationManager: NSObject, CINotificationManaging
       trigger: nil
     )
     try await center.add(request)
+  }
+
+  public func openSystemSettingsNotifications() {
+    #if canImport(AppKit)
+    if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension"),
+       NSWorkspace.shared.open(url) {
+      return
+    }
+    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") {
+      NSWorkspace.shared.open(url)
+    }
+    #endif
   }
 }
 
