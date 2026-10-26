@@ -39,6 +39,7 @@ public struct SettingsView: View {
   public let configStore: ConfigStore
   public let tokenStore: any TokenStore
   public let launchAtLoginManager: any LaunchAtLoginManaging
+  public let notificationManager: any CINotificationManaging
   public let snapshot: WidgetSnapshot?
   public let snapshotPublisher: AnyPublisher<WidgetSnapshot?, Never>?
   public var onConfigChange: ((RepoRadarConfig) -> Void)?
@@ -48,6 +49,7 @@ public struct SettingsView: View {
     configStore: ConfigStore,
     tokenStore: any TokenStore,
     launchAtLoginManager: any LaunchAtLoginManaging = AppServiceLaunchAtLoginManager(),
+    notificationManager: any CINotificationManaging = SystemCINotificationManager(),
     snapshot: WidgetSnapshot? = nil,
     snapshotPublisher: AnyPublisher<WidgetSnapshot?, Never>? = nil,
     initialTab: SettingsTab = .general,
@@ -57,6 +59,7 @@ public struct SettingsView: View {
     self.configStore = configStore
     self.tokenStore = tokenStore
     self.launchAtLoginManager = launchAtLoginManager
+    self.notificationManager = notificationManager
     self.snapshot = snapshot
     self.snapshotPublisher = snapshotPublisher
     self._selectedTab = State(initialValue: initialTab)
@@ -68,6 +71,7 @@ public struct SettingsView: View {
     configStore: ConfigStore,
     scheduler: RefreshScheduler,
     launchAtLoginManager: any LaunchAtLoginManaging = AppServiceLaunchAtLoginManager(),
+    notificationManager: (any CINotificationManaging)? = nil,
     initialTab: SettingsTab = .general,
     onConfigChange: ((RepoRadarConfig) -> Void)? = nil,
     onRefreshRequest: (() -> Void)? = nil
@@ -76,6 +80,7 @@ public struct SettingsView: View {
       configStore: configStore,
       tokenStore: scheduler.service.tokenStore,
       launchAtLoginManager: launchAtLoginManager,
+      notificationManager: notificationManager ?? scheduler.notificationManager,
       snapshot: scheduler.latestSnapshot,
       snapshotPublisher: scheduler.$latestSnapshot.eraseToAnyPublisher(),
       initialTab: initialTab,
@@ -89,6 +94,7 @@ public struct SettingsView: View {
       GeneralSettingsView(
         configStore: configStore,
         launchAtLoginManager: launchAtLoginManager,
+        notificationManager: notificationManager,
         onConfigChange: onConfigChange
       )
         .tabItem {
@@ -137,12 +143,14 @@ public struct GeneralSettingsView: View {
   public init(
     configStore: ConfigStore,
     launchAtLoginManager: any LaunchAtLoginManaging = AppServiceLaunchAtLoginManager(),
+    notificationManager: any CINotificationManaging = SystemCINotificationManager(),
     onConfigChange: ((RepoRadarConfig) -> Void)? = nil
   ) {
     self._viewModel = StateObject(
       wrappedValue: GeneralSettingsViewModel(
         configStore: configStore,
         launchAtLoginManager: launchAtLoginManager,
+        notificationManager: notificationManager,
         onConfigChange: onConfigChange
       )
     )
@@ -194,6 +202,22 @@ public struct GeneralSettingsView: View {
 
       Section {
         Toggle("Notify me when CI turns red", isOn: $viewModel.ciNotifications)
+
+        if viewModel.ciNotifications && viewModel.isNotificationPermissionDenied {
+          HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+              .foregroundStyle(.orange)
+            Text("Notifications are off for RepoRadar in System Settings")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+            Spacer()
+            Button("Open Settings") {
+              viewModel.openSystemSettingsNotifications()
+            }
+            .buttonStyle(.link)
+            .font(.caption)
+          }
+        }
       } footer: {
         Text("Only when a check goes from passing to failing. Off by default.")
           .font(.system(size: 11))
@@ -206,6 +230,7 @@ public struct GeneralSettingsView: View {
     .padding(.bottom, 8)
     .onAppear {
       viewModel.refreshLaunchAtLoginStatus()
+      viewModel.checkNotificationAuthorization()
     }
   }
 }

@@ -1,14 +1,23 @@
 import SwiftUI
 import Combine
+import UserNotifications
 import RepoRadarCore
 
 @MainActor
 final class AppModel: ObservableObject {
   let scheduler: RefreshScheduler?
+  let notificationDelegate: CINotificationDelegate
   private var cancellable: AnyCancellable?
   private var wakeCancellable: AnyCancellable?
 
-  init(scheduler: RefreshScheduler? = RefreshScheduler()) {
+  init(
+    scheduler: RefreshScheduler? = RefreshScheduler(),
+    notificationDelegate: CINotificationDelegate = CINotificationDelegate()
+  ) {
+    self.notificationDelegate = notificationDelegate
+    if Bundle.main.bundleIdentifier != nil {
+      UNUserNotificationCenter.current().delegate = notificationDelegate
+    }
     self.scheduler = scheduler
 
     if let scheduler {
@@ -43,11 +52,25 @@ final class AppModel: ObservableObject {
   }
 }
 
+final class AppDelegate: NSObject, NSApplicationDelegate {
+  static let sharedNotificationDelegate = CINotificationDelegate()
+
+  func applicationWillFinishLaunching(_ notification: Notification) {
+    if Bundle.main.bundleIdentifier != nil {
+      UNUserNotificationCenter.current().delegate = Self.sharedNotificationDelegate
+    }
+  }
+}
+
 @main
 struct RepoRadarApp: App {
-  @StateObject private var model = AppModel()
+  @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+  @StateObject private var model = AppModel(notificationDelegate: AppDelegate.sharedNotificationDelegate)
 
   init() {
+    if Bundle.main.bundleIdentifier != nil {
+      UNUserNotificationCenter.current().delegate = AppDelegate.sharedNotificationDelegate
+    }
     #if DEBUG
     if CommandLine.arguments.contains("--verify-keychain") {
       runKeychainVerification()
