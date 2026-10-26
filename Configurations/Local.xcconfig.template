@@ -1,4 +1,4 @@
 // Copy to Configurations/Local.xcconfig to sign local builds with your Apple Developer Team.
 // Find your Team ID: Xcode → Settings → Accounts → your Apple ID → Team ID, or run:
-//   security find-identity -v -p codesigning
+//   security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject -nameopt multiline | grep organizationalUnitName
 DEVELOPMENT_TEAM = 7P5RMM8JP7

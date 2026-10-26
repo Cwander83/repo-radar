@@ -23,7 +23,13 @@ Native Swift (`RepoRadarCore` package + menu bar host app + WidgetKit extension)
    cp Configurations/Local.xcconfig.template Configurations/Local.xcconfig
    ```
 
-   Find your Team ID in Xcode (Settings → Accounts → your Apple ID → Team ID) or via `security find-identity -v -p codesigning`. If it differs from the default in the template, edit `Configurations/Local.xcconfig`.
+   Find your Team ID in Xcode (Settings → Accounts → your Apple ID → Team ID) or via:
+
+   ```bash
+   security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject -nameopt multiline | grep organizationalUnitName
+   ```
+
+   If it differs from the default in the template, edit `Configurations/Local.xcconfig`.
 
 2. Build, sign, install to `/Applications/RepoRadar.app`, and launch:
 
