@@ -51,6 +51,10 @@ The menu bar app fetches your repos on a timer with one GitHub GraphQL query and
    - `make app` — build and sign `dist/RepoRadar.app` in Release without installing
    - `make clean` — remove `dist/` and `.build/`
 
+### Weekly Re-signing (Free Personal Team)
+
+Free Apple personal-team provisioning profiles expire after **7 days**. `make install` passes `-allowProvisioningUpdates` to `xcodebuild` to refresh and re-sign the app and widget extension. Re-run `make install` at least **once a week** so the app and desktop widget keep running.
+
 ## First Run
 
 RepoRadar lives in the menu bar (no Dock icon). Click its icon and choose **Open Settings…**.
@@ -70,10 +74,6 @@ Optional settings:
 
 - **General**: how often to check GitHub, refresh on wake, launch at login, a failing-CI count in the menu bar, and notifications when CI turns red.
 - **Repositories**: how many days before a branch counts as stale.
-
-### Weekly Re-signing (Free Personal Team)
-
-Free Apple personal-team provisioning profiles expire after **7 days**. `make install` passes `-allowProvisioningUpdates` to `xcodebuild` to refresh and re-sign the app and widget extension. Re-run `make install` at least **once a week** so the app and desktop widget keep running.
 
 ## License
 
