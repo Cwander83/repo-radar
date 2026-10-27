@@ -72,6 +72,11 @@ public struct PopoverContentView: View {
   let onRefresh: () -> Void
   let onOpenSettings: () -> Void
 
+  /// The window-style MenuBarExtra sizes to its content's ideal height, and a ScrollView has none,
+  /// so the scroll area is sized to its measured content, capped so long lists scroll.
+  @State private var contentHeight: CGFloat = 0
+  private static let maxContentHeight: CGFloat = 480
+
   public init(
     state: PopoverState,
     repoCount: Int,
@@ -196,7 +201,9 @@ public struct PopoverContentView: View {
             sectionsList
           }
           .padding(.vertical, 8)
+          .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { contentHeight = $0 }
         }
+        .frame(height: min(contentHeight, Self.maxContentHeight))
         .opacity(state == .token || state == .offline || state == .error ? 0.5 : 1.0)
       }
 
@@ -257,22 +264,30 @@ public struct PopoverContentView: View {
     .padding(.bottom, 10)
   }
 
+  private var repoCountText: String {
+    repoCount == 1 ? "1 repo" : "\(repoCount) repos"
+  }
+
+  private var allPassingText: String {
+    repoCount == 1 ? "1 repo passing" : "All \(repoCount) repos passing"
+  }
+
   private var subtitleText: String {
     if isWaitingForFirstRefresh && state != .setup {
-      return "\(repoCount) repos · Waiting for first refresh"
+      return "\(repoCountText) · Waiting for first refresh"
     }
 
     switch state {
     case .issues:
       if let lastUpdated {
-        return "\(repoCount) repos · Updated \(relativeTimeString(from: lastUpdated))"
+        return "\(repoCountText) · Updated \(relativeTimeString(from: lastUpdated))"
       }
-      return "\(repoCount) repos"
+      return repoCountText
     case .clear:
       if let lastUpdated {
-        return "\(repoCount) repos · Updated \(relativeTimeString(from: lastUpdated))"
+        return "\(repoCountText) · Updated \(relativeTimeString(from: lastUpdated))"
       }
-      return "\(repoCount) repos · Waiting for first refresh"
+      return "\(repoCountText) · Waiting for first refresh"
     case .token:
       if let lastUpdated {
         return "Not refreshing · last update \(lastUpdated.formatted(date: .abbreviated, time: .shortened))"
@@ -451,10 +466,10 @@ public struct PopoverContentView: View {
         PopoverRowView(
           icon: "checkmark.circle.fill",
           iconColor: RepoRadarColors.statusPass,
-          title: "All \(repoCount) repos passing",
+          title: allPassingText,
           meta: "Default branches and your PRs · \(checkedText)",
           url: nil,
-          accessibilityLabelText: "CI passing, All \(repoCount) repos passing, Default branches and your PRs, \(spokenCheckedText)"
+          accessibilityLabelText: "CI passing, \(allPassingText), Default branches and your PRs, \(spokenCheckedText)"
         )
       } else {
         ForEach(failingCI) { item in
