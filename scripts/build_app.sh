@@ -16,7 +16,11 @@ if [ ! -f "${LOCAL_XCCONFIG}" ]; then
   exit 1
 fi
 
-echo "==> Building and signing ${APP_NAME} (${CONFIGURATION})..."
+# WidgetKit only re-reads widget descriptors when the extension's build number
+# changes, so every build gets a new one.
+BUILD_NUMBER="$(date +%Y%m%d%H%M%S)"
+
+echo "==> Building and signing ${APP_NAME} (${CONFIGURATION}, build ${BUILD_NUMBER})..."
 mkdir -p "${DIST_DIR}"
 
 xcodebuild -project RepoRadar.xcodeproj \
@@ -24,6 +28,7 @@ xcodebuild -project RepoRadar.xcodeproj \
   -configuration "${CONFIGURATION}" \
   -derivedDataPath "${BUILD_DIR}" \
   -allowProvisioningUpdates \
+  CURRENT_PROJECT_VERSION="${BUILD_NUMBER}" \
   build
 
 APP_PATH="${BUILD_DIR}/Build/Products/${CONFIGURATION}/${APP_NAME}.app"
