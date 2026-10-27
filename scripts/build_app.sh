@@ -2,6 +2,7 @@
 set -euo pipefail
 
 APP_NAME="RepoRadar"
+WIDGET_NAME="RepoRadarWidget"
 CONFIGURATION="${CONFIGURATION:-Release}"
 DIST_DIR="dist"
 BUILD_DIR="${DIST_DIR}/Build"
@@ -46,6 +47,12 @@ if [[ "${1:-}" == "--install" ]]; then
   echo "==> Installing to /Applications/${APP_NAME}.app..."
   rm -rf "/Applications/${APP_NAME}.app"
   cp -R "${DIST_DIR}/${APP_NAME}.app" "/Applications/${APP_NAME}.app"
+  # The widget extension runs as its own process and outlives the reinstall;
+  # stop it so macOS relaunches it from the new bundle.
+  if pgrep -x "${WIDGET_NAME}" >/dev/null 2>&1; then
+    echo "==> Stopping running ${WIDGET_NAME}..."
+    killall "${WIDGET_NAME}" 2>/dev/null || true
+  fi
   pluginkit -a "/Applications/${APP_NAME}.app/Contents/PlugIns/RepoRadarWidget.appex"
   echo "✓ Installed to /Applications/${APP_NAME}.app"
   echo "==> Launching /Applications/${APP_NAME}.app..."
