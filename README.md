@@ -10,6 +10,12 @@ Native Swift (`RepoRadarCore` package + menu bar host app + WidgetKit extension)
 
 The menu bar app fetches your repos on a timer with one GitHub GraphQL query and hands a snapshot to the widget. The widget comes in small, medium, and large sizes; the menu bar popover shows the same data in more detail.
 
+| Small | Medium | Large |
+|---|---|---|
+| <img src="assets/screenshots/widget-small.png" alt="Small widget: failing, PR, review, and stale counts" width="170"> | <img src="assets/screenshots/widget-medium.png" alt="Medium widget: counts and the top items" width="350"> | <img src="assets/screenshots/widget-large.png" alt="Large widget: counts with CI and pull request sections" width="350"> |
+
+<img src="assets/screenshots/popover.png" alt="Menu bar popover: count tiles, CI status, pull requests, and stale branches" width="350">
+
 ## Requirements
 
 - macOS 26+
