@@ -143,7 +143,7 @@ private struct AppGroupUnavailableView: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
       Text("App Group unavailable — reinstall/re-sign")
-        .foregroundStyle(.red)
+        .foregroundStyle(RepoRadarColors.statusFailText)
         .font(.callout)
       Divider()
       Button("Quit") {
