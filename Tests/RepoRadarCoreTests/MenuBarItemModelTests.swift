@@ -121,7 +121,6 @@ struct MenuBarItemModelTests {
   }
 
   #if canImport(AppKit)
-  #if canImport(AppKit)
   @Test("Every menu bar and widget section symbol exists in SF Symbols (CHR-102)")
   func testSymbolNamesResolve() {
     let states: [MenuBarState] = [.clear, .failing(count: 2), .offline, .error]
@@ -133,7 +132,6 @@ struct MenuBarItemModelTests {
       )
     }
   }
-  #endif
 
   @Test("MenuBarBadgeImage renders valid, non-template image with correct bounds")
   @MainActor
