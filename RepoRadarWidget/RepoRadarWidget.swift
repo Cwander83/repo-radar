@@ -119,15 +119,21 @@ public struct Provider: AppIntentTimelineProvider {
 /// Root widget entry view routing to appropriate family presentation (small, medium, large).
 public struct RepoRadarWidgetEntryView: View {
   public let entry: RepoRadarWidgetEntry
+  private let familyOverride: WidgetFamily?
   @Environment(\.widgetFamily) private var family
 
-  public init(entry: RepoRadarWidgetEntry) {
+  public init(entry: RepoRadarWidgetEntry, family: WidgetFamily? = nil) {
     self.entry = entry
+    self.familyOverride = family
+  }
+
+  private var activeFamily: WidgetFamily {
+    familyOverride ?? family
   }
 
   public var body: some View {
     Group {
-      switch family {
+      switch activeFamily {
       case .systemSmall:
         SmallWidgetView(entry: entry)
       case .systemMedium:
@@ -257,18 +263,21 @@ private struct MetricPill: View {
   }
 
   var body: some View {
-    HStack(spacing: 3) {
+    HStack(spacing: 2.5) {
       Text("\(count)")
         .font(.system(size: 10.5, weight: .bold))
         .foregroundStyle(isAlert ? textColor : .primary)
+        .lineLimit(1)
         .widgetAccentable(isAlert)
 
       Text(label)
         .font(.system(size: 9, weight: .medium))
         .foregroundStyle(isAlert ? textColor : .secondary)
+        .lineLimit(1)
+        .minimumScaleFactor(0.85)
         .widgetAccentable(isAlert)
     }
-    .padding(.horizontal, 5)
+    .padding(.horizontal, 4)
     .padding(.vertical, 2)
     .background(
       RoundedRectangle(cornerRadius: 4.5, style: .continuous)
@@ -279,6 +288,7 @@ private struct MetricPill: View {
         .stroke(isAlert ? color.opacity(0.3) : Color.clear, lineWidth: 0.75)
         .widgetAccentable(isAlert)
     )
+    .fixedSize(horizontal: true, vertical: false)
     .accessibilityElement(children: .combine)
     .accessibilityLabel("\(count) \(label)")
   }
@@ -989,11 +999,12 @@ private struct MediumDataView: View {
           .font(.system(size: 13, weight: .semibold))
           .foregroundStyle(isDimmed ? .secondary : .primary)
           .lineLimit(1)
+          .layoutPriority(0)
 
         Spacer(minLength: 4)
 
         if section == .all {
-          HStack(spacing: 4) {
+          HStack(spacing: 3) {
             MetricPill(
               count: snapshot.failingCI.count,
               label: "failing",
@@ -1023,6 +1034,7 @@ private struct MediumDataView: View {
               isAlert: false
             )
           }
+          .layoutPriority(1)
         } else {
           MetricPill(
             count: filteredCount,
@@ -1031,6 +1043,7 @@ private struct MediumDataView: View {
             textColor: section == .failingCI ? RepoRadarColors.statusFailText : sectionColor(section),
             isAlert: section == .failingCI && filteredCount > 0
           )
+          .layoutPriority(1)
         }
       }
 
