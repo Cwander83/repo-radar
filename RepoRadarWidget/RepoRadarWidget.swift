@@ -644,7 +644,7 @@ private struct SmallSectionListView: View {
     case .all:
       return snapshot.failingCI.count + snapshot.pullRequests.count + snapshot.staleBranches.count
     case .failingCI:
-      return snapshot.failingCI.count + snapshot.runningCI.count
+      return snapshot.failingCI.count
     case .pullRequests:
       return snapshot.pullRequests.count
     case .staleBranches:
@@ -1088,7 +1088,7 @@ private struct MediumDataView: View {
     case .all:
       return snapshot.failingCI.count + snapshot.pullRequests.count + snapshot.staleBranches.count
     case .failingCI:
-      return snapshot.failingCI.count + snapshot.runningCI.count
+      return snapshot.failingCI.count
     case .pullRequests:
       return snapshot.pullRequests.count
     case .staleBranches:
@@ -1470,13 +1470,13 @@ private struct LargeDataView: View {
       VStack(alignment: .leading, spacing: 8) {
         // Section 1: Failing CI
         if section == .all || section == .failingCI {
-          if !snapshot.failingCI.isEmpty || !snapshot.runningCI.isEmpty {
+          if !snapshot.failingCI.isEmpty {
             VStack(alignment: .leading, spacing: 3) {
               WidgetSectionHeader(
                 icon: "xmark.circle.fill",
                 iconColor: RepoRadarColors.statusFail,
                 title: "FAILING CI",
-                count: snapshot.failingCI.count + snapshot.runningCI.count
+                count: snapshot.failingCI.count
               )
 
               ForEach(failingDisplay) { item in
@@ -1492,6 +1492,17 @@ private struct LargeDataView: View {
                   accessibilityLabelText: item.accessibilityLabel()
                 )
               }
+            }
+          }
+
+          if !snapshot.runningCI.isEmpty {
+            VStack(alignment: .leading, spacing: 3) {
+              WidgetSectionHeader(
+                icon: "circle.dashed",
+                iconColor: .secondary,
+                title: "RUNNING CI",
+                count: snapshot.runningCI.count
+              )
 
               ForEach(runningDisplay) { item in
                 WidgetRowView(
