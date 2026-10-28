@@ -257,18 +257,20 @@ private struct MetricPill: View {
   }
 
   var body: some View {
-    HStack(spacing: 3) {
+    HStack(spacing: 2.5) {
       Text("\(count)")
         .font(.system(size: 10.5, weight: .bold))
         .foregroundStyle(isAlert ? textColor : .primary)
+        .lineLimit(1)
         .widgetAccentable(isAlert)
 
       Text(label)
         .font(.system(size: 9, weight: .medium))
         .foregroundStyle(isAlert ? textColor : .secondary)
+        .lineLimit(1)
         .widgetAccentable(isAlert)
     }
-    .padding(.horizontal, 5)
+    .padding(.horizontal, 4)
     .padding(.vertical, 2)
     .background(
       RoundedRectangle(cornerRadius: 4.5, style: .continuous)
@@ -279,6 +281,7 @@ private struct MetricPill: View {
         .stroke(isAlert ? color.opacity(0.3) : Color.clear, lineWidth: 0.75)
         .widgetAccentable(isAlert)
     )
+    .fixedSize(horizontal: true, vertical: false)
     .accessibilityElement(children: .combine)
     .accessibilityLabel("\(count) \(label)")
   }
@@ -993,7 +996,7 @@ private struct MediumDataView: View {
         Spacer(minLength: 4)
 
         if section == .all {
-          HStack(spacing: 4) {
+          HStack(spacing: 3) {
             MetricPill(
               count: snapshot.failingCI.count,
               label: "failing",
@@ -1023,6 +1026,7 @@ private struct MediumDataView: View {
               isAlert: false
             )
           }
+          .layoutPriority(1)
         } else {
           MetricPill(
             count: filteredCount,
@@ -1031,6 +1035,7 @@ private struct MediumDataView: View {
             textColor: section == .failingCI ? RepoRadarColors.statusFailText : sectionColor(section),
             isAlert: section == .failingCI && filteredCount > 0
           )
+          .layoutPriority(1)
         }
       }
 
